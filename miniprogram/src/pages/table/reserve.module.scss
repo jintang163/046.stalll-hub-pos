@@ -1,0 +1,550 @@
+.container {
+  min-height: 100vh;
+  background: #f5f7fa;
+  padding-bottom: 160rpx;
+}
+
+.tabs {
+  background: #fff;
+}
+
+.scrollContent {
+  height: calc(100vh - 160rpx);
+}
+
+.section {
+  background: #fff;
+  margin-bottom: 20rpx;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 24rpx 32rpx 16rpx;
+}
+
+.sectionIcon {
+  font-size: 32rpx;
+}
+
+.sectionTitle {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.storeSelector {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24rpx 32rpx;
+}
+
+.storeInfo {
+  flex: 1;
+}
+
+.storeName {
+  font-size: 30rpx;
+  font-weight: 500;
+  color: #333;
+  display: block;
+}
+
+.storeAddress {
+  font-size: 24rpx;
+  color: #999;
+  margin-top: 8rpx;
+  display: block;
+}
+
+.storeArrow {
+  font-size: 24rpx;
+  color: #999;
+  margin-left: 16rpx;
+}
+
+.dateList {
+  display: flex;
+  gap: 16rpx;
+  padding: 0 32rpx 24rpx;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.dateItem {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 120rpx;
+  height: 120rpx;
+  border-radius: 16rpx;
+  background: #f5f7fa;
+  border: 2rpx solid transparent;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.dateActive {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-color: #667eea;
+}
+
+.dateWeek {
+  font-size: 24rpx;
+  color: #666;
+  margin-bottom: 8rpx;
+}
+
+.dateActive .dateWeek {
+  color: #fff;
+}
+
+.dateDay {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.dateActive .dateDay {
+  color: #fff;
+}
+
+.timeSlots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  padding: 0 32rpx 24rpx;
+}
+
+.timeSlot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: calc(25% - 12rpx);
+  height: 100rpx;
+  border-radius: 12rpx;
+  background: #f0f9eb;
+  border: 2rpx solid transparent;
+  transition: all 0.2s ease;
+}
+
+.timeSlotAvailable {
+  background: #f0f9eb;
+  border-color: #c7e9c0;
+}
+
+.timeSlotAvailable .timeText {
+  color: #67c23a;
+}
+
+.timeSlotAvailable .availableText {
+  color: #67c23a;
+}
+
+.timeSlotFull {
+  background: #f5f7fa;
+  border-color: #e0e0e0;
+}
+
+.timeSlotFull .timeText {
+  color: #999;
+}
+
+.timeSlotFull .availableText {
+  color: #999;
+}
+
+.timeSlotActive {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-color: #667eea;
+}
+
+.timeSlotActive .timeText {
+  color: #fff;
+}
+
+.timeSlotActive .availableText {
+  color: #fff;
+}
+
+.timeText {
+  font-size: 28rpx;
+  font-weight: 500;
+}
+
+.availableText {
+  font-size: 20rpx;
+  margin-top: 4rpx;
+}
+
+.peopleSection {
+  padding: 0 32rpx 24rpx;
+}
+
+.peopleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.peopleLabel {
+  font-size: 28rpx;
+  color: #333;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+}
+
+.stepperBtn {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  background: #f5f7fa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32rpx;
+  color: #333;
+}
+
+.stepperBtnDisabled {
+  opacity: 0.5;
+}
+
+.stepperValue {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #333;
+  min-width: 60rpx;
+  text-align: center;
+}
+
+.tableRecommend {
+  padding: 0 32rpx 24rpx;
+}
+
+.tableCard {
+  padding: 24rpx;
+  background: linear-gradient(135deg, #f0f4ff 0%, #fff 100%);
+  border-radius: 16rpx;
+  border: 2rpx solid #e0e7ff;
+}
+
+.tableType {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #667eea;
+  margin-bottom: 8rpx;
+  display: block;
+}
+
+.tableDesc {
+  font-size: 24rpx;
+  color: #666;
+}
+
+.formSection {
+  padding: 0 32rpx 24rpx;
+}
+
+.inputRow {
+  display: flex;
+  align-items: center;
+  padding: 24rpx 0;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.inputRow:last-child {
+  border-bottom: none;
+}
+
+.inputLabel {
+  width: 120rpx;
+  font-size: 28rpx;
+  color: #333;
+  flex-shrink: 0;
+}
+
+.inputField {
+  flex: 1;
+  font-size: 28rpx;
+  color: #333;
+  border: none;
+  outline: none;
+  background: transparent;
+}
+
+.textareaField {
+  flex: 1;
+  font-size: 28rpx;
+  color: #333;
+  border: none;
+  outline: none;
+  background: transparent;
+  min-height: 120rpx;
+  resize: none;
+}
+
+.remarkRow {
+  align-items: flex-start;
+  padding-top: 24rpx;
+}
+
+.footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #fff;
+  box-shadow: 0 -4rpx 20rpx rgba(0, 0, 0, 0.08);
+  padding: 20rpx 24rpx;
+  z-index: 100;
+}
+
+.rulesText {
+  font-size: 22rpx;
+  color: #999;
+  margin-bottom: 16rpx;
+  padding: 0 8rpx;
+}
+
+.footerActions {
+  display: flex;
+  gap: 20rpx;
+}
+
+.submitBtn {
+  flex: 1;
+  height: 88rpx;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 44rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btnDisabled {
+  opacity: 0.7;
+}
+
+.submitText {
+  color: #fff;
+  font-size: 30rpx;
+  font-weight: 600;
+}
+
+.successPage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 60rpx 48rpx;
+  background: #fff;
+}
+
+.successIcon {
+  width: 160rpx;
+  height: 160rpx;
+  background: linear-gradient(135deg, #67c23a 0%, #85ce61 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 80rpx;
+  margin-bottom: 32rpx;
+}
+
+.successTitle {
+  font-size: 36rpx;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 16rpx;
+}
+
+.successSubtitle {
+  font-size: 26rpx;
+  color: #666;
+  margin-bottom: 48rpx;
+  text-align: center;
+}
+
+.reservationDetail {
+  width: 100%;
+  background: #f5f7fa;
+  border-radius: 16rpx;
+  padding: 32rpx;
+  margin-bottom: 48rpx;
+}
+
+.detailRow {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 16rpx;
+}
+
+.detailRow:last-child {
+  margin-bottom: 0;
+}
+
+.detailLabel {
+  font-size: 26rpx;
+  color: #999;
+}
+
+.detailValue {
+  font-size: 26rpx;
+  color: #333;
+  font-weight: 500;
+}
+
+.successActions {
+  display: flex;
+  gap: 24rpx;
+  width: 100%;
+}
+
+.actionBtn {
+  flex: 1;
+  height: 88rpx;
+  border-radius: 44rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2rpx solid #667eea;
+}
+
+.actionBtnPrimary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-color: transparent;
+}
+
+.actionBtnText {
+  font-size: 28rpx;
+  color: #667eea;
+  font-weight: 500;
+}
+
+.actionBtnPrimary .actionBtnText {
+  color: #fff;
+}
+
+.reservationList {
+  padding: 20rpx;
+}
+
+.reservationCard {
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 20rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.05);
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16rpx;
+  padding-bottom: 16rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.cardStore {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.cardStatus {
+  font-size: 24rpx;
+  padding: 6rpx 16rpx;
+  border-radius: 8rpx;
+}
+
+.statusPending {
+  background: #fdf6ec;
+  color: #e6a23c;
+}
+
+.statusConfirmed {
+  background: #f0f9eb;
+  color: #67c23a;
+}
+
+.statusCancelled {
+  background: #f5f7fa;
+  color: #909399;
+}
+
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.cardRow {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.cardIcon {
+  font-size: 24rpx;
+}
+
+.cardText {
+  font-size: 26rpx;
+  color: #666;
+}
+
+.cardFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 16rpx;
+  margin-top: 20rpx;
+  padding-top: 16rpx;
+  border-top: 1rpx solid #f0f0f0;
+}
+
+.cardBtn {
+  padding: 12rpx 24rpx;
+  border-radius: 8rpx;
+  font-size: 24rpx;
+}
+
+.cardBtnSecondary {
+  background: #f5f7fa;
+  color: #666;
+}
+
+.cardBtnPrimary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+}
+
+.emptyReservations {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 120rpx 48rpx;
+}
+
+.emptyIcon {
+  font-size: 120rpx;
+  margin-bottom: 24rpx;
+  opacity: 0.5;
+}
+
+.emptyText {
+  font-size: 28rpx;
+  color: #999;
+}

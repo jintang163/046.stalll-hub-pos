@@ -10,6 +10,7 @@ import (
 	"stalll-hub-pos/backend/internal/dto"
 	"stalll-hub-pos/backend/internal/middleware"
 	"stalll-hub-pos/backend/internal/service"
+	"stalll-hub-pos/backend/pkg/response"
 )
 
 type OrderHandler struct {
@@ -17,6 +18,9 @@ type OrderHandler struct {
 }
 
 func NewOrderHandler(orderService *service.OrderService) *OrderHandler {
+	if orderService == nil {
+		orderService = service.NewOrderService()
+	}
 	return &OrderHandler{orderService: orderService}
 }
 

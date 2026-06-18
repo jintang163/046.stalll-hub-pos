@@ -7,7 +7,9 @@ export default defineAppConfig({
     'pages/order/list',
     'pages/order/detail',
     'pages/user/index',
-    'pages/store/select'
+    'pages/store/select',
+    'pages/table/scan',
+    'pages/table/reserve'
   ],
   window: {
     backgroundTextStyle: 'light',

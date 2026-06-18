@@ -11,7 +11,7 @@ import (
 
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
-	"stalll-hub-pos/backend/config"
+	"stalll-hub-pos/backend/pkg/config"
 	"stalll-hub-pos/backend/internal/dto"
 	"stalll-hub-pos/backend/internal/model"
 	"stalll-hub-pos/backend/internal/repository"
@@ -25,17 +25,12 @@ type OrderService struct {
 	cfg         *config.Config
 }
 
-func NewOrderService(
-	orderRepo *repository.OrderRepository,
-	productRepo *repository.ProductRepository,
-	nsqProducer *nsq.Producer,
-	cfg *config.Config,
-) *OrderService {
+func NewOrderService() *OrderService {
 	return &OrderService{
-		orderRepo:   orderRepo,
-		productRepo: productRepo,
-		nsqProducer: nsqProducer,
-		cfg:         cfg,
+		orderRepo:   repository.NewOrderRepository(),
+		productRepo: repository.NewProductRepository(),
+		nsqProducer: nsq.Producer,
+		cfg:         config.AppConfig,
 	}
 }
 

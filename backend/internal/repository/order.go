@@ -6,14 +6,15 @@ import (
 	"gorm.io/gorm"
 	"stalll-hub-pos/backend/internal/dto"
 	"stalll-hub-pos/backend/internal/model"
+	"stalll-hub-pos/backend/pkg/database"
 )
 
 type OrderRepository struct {
 	db *gorm.DB
 }
 
-func NewOrderRepository(db *gorm.DB) *OrderRepository {
-	return &OrderRepository{db: db}
+func NewOrderRepository() *OrderRepository {
+	return &OrderRepository{db: database.DB}
 }
 
 func (r *OrderRepository) Create(order *model.Order) error {

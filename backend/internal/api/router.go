@@ -5,7 +5,7 @@ import (
 	"stalll-hub-pos/backend/internal/middleware"
 	"stalll-hub-pos/backend/internal/repository"
 	"stalll-hub-pos/backend/internal/service"
-	"stalll-hub-pos/backend/config"
+	"stalll-hub-pos/backend/pkg/config"
 	"stalll-hub-pos/backend/pkg/nsq"
 
 	"github.com/gin-gonic/gin"
@@ -26,11 +26,9 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 	couponHandler := handler.NewCouponHandler()
 	reportHandler := handler.NewReportHandler()
 	paymentHandler := handler.NewPaymentHandler()
+	tableHandler := handler.NewTableHandler()
 
-	orderRepo := repository.NewOrderRepository(db)
-	productRepo := repository.NewProductRepository(db)
-	orderService := service.NewOrderService(orderRepo, productRepo, nsqProducer, config.AppConfig)
-	orderHandler := handler.NewOrderHandler(orderService)
+	orderHandler := handler.NewOrderHandler(nil)
 
 	api := r.Group("/api/v1")
 	{
@@ -173,6 +171,68 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 			wechat.POST("/refund", middleware.JWTAuth(), paymentHandler.WechatRefund)
 			wechat.POST("/notify", paymentHandler.WechatNotify)
 			wechat.POST("/refund/notify", paymentHandler.WechatRefundNotify)
+		}
+
+		tables := api.Group("/tables")
+		{
+			tables.POST("", middleware.JWTAuth(), tableHandler.CreateTable)
+			tables.GET("", middleware.JWTAuth(), tableHandler.ListTables)
+			tables.GET("/:id", middleware.JWTAuth(), tableHandler.GetTable)
+			tables.PUT("/:id", middleware.JWTAuth(), tableHandler.UpdateTable)
+			tables.DELETE("/:id", middleware.JWTAuth(), tableHandler.DeleteTable)
+			tables.POST("/batch", middleware.JWTAuth(), tableHandler.BatchCreateTables)
+			tables.POST("/:id/qrcode", middleware.JWTAuth(), tableHandler.GenerateQRCode)
+			tables.GET("/occupied", middleware.JWTAuth(), tableHandler.GetOccupiedTables)
+			tables.GET("/available", tableHandler.GetAvailableTables)
+			tables.POST("/checkin", middleware.JWTAuth(), tableHandler.Checkin)
+			tables.POST("/checkout", middleware.JWTAuth(), tableHandler.Checkout)
+			tables.POST("/scan", tableHandler.ScanQRCode)
+		}
+
+		tableAreas := api.Group("/table-areas")
+		tableAreas.Use(middleware.JWTAuth())
+		{
+			tableAreas.POST("", tableHandler.CreateArea)
+			tableAreas.GET("", tableHandler.ListAreas)
+			tableAreas.PUT("/:id", tableHandler.UpdateArea)
+			tableAreas.DELETE("/:id", tableHandler.DeleteArea)
+		}
+
+		reservations := api.Group("/reservations")
+		{
+			reservations.POST("", tableHandler.CreateReservation)
+			reservations.GET("", middleware.JWTAuth(), tableHandler.ListReservations)
+			reservations.GET("/:id", middleware.JWTAuth(), tableHandler.GetReservation)
+			reservations.PUT("/:id", middleware.JWTAuth(), tableHandler.UpdateReservation)
+			reservations.POST("/:id/cancel", tableHandler.CancelReservation)
+			reservations.POST("/:id/checkin", middleware.JWTAuth(), tableHandler.CheckinReservation)
+			reservations.GET("/timeslots", tableHandler.GetTimeSlots)
+		}
+
+		queues := api.Group("/queues")
+		{
+			queues.POST("", tableHandler.CreateQueue)
+			queues.GET("", middleware.JWTAuth(), tableHandler.ListQueues)
+			queues.GET("/:id", middleware.JWTAuth(), tableHandler.GetQueue)
+			queues.POST("/call", middleware.JWTAuth(), tableHandler.CallQueue)
+			queues.POST("/call-next/:store_id", middleware.JWTAuth(), tableHandler.CallNextQueue)
+			queues.POST("/cancel", tableHandler.CancelQueue)
+			queues.POST("/arrive", middleware.JWTAuth(), tableHandler.ArriveQueue)
+			queues.GET("/status", tableHandler.GetQueueStatus)
+			queues.GET("/my", tableHandler.GetMyQueue)
+			queues.GET("/waiting-count", tableHandler.GetWaitingCount)
+		}
+
+		queueConfigs := api.Group("/queue-config")
+		queueConfigs.Use(middleware.JWTAuth())
+		{
+			queueConfigs.GET("", tableHandler.GetQueueConfig)
+			queueConfigs.POST("", tableHandler.SaveQueueConfig)
+		}
+
+		storesMap := api.Group("/store-map")
+		{
+			storesMap.GET("", tableHandler.GetStoreMap)
 		}
 	}
 

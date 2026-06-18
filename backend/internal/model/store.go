@@ -1,14 +1,27 @@
 package model
 
+import "time"
+
 type Store struct {
 	BaseModel
-	Name        string `gorm:"size:100;not null" json:"name"`
-	Address     string `gorm:"size:255" json:"address"`
-	Phone       string `gorm:"size:20" json:"phone"`
-	BusinessHours string `gorm:"size:100" json:"business_hours"`
-	Status      int    `gorm:"default:1" json:"status"`
-	Description string `gorm:"size:500" json:"description"`
-	Logo        string `gorm:"size:255" json:"logo"`
+	Name          string     `gorm:"size:100;not null" json:"name"`
+	Address       string     `gorm:"size:255" json:"address"`
+	Phone         string     `gorm:"size:20" json:"phone"`
+	BusinessHours string     `gorm:"size:100" json:"business_hours"`
+	Status        int        `gorm:"default:1" json:"status"`
+	Description   string     `gorm:"size:500" json:"description"`
+	Logo          string     `gorm:"size:255" json:"logo"`
+	Latitude      string     `gorm:"size:50" json:"latitude"`
+	Longitude     string     `gorm:"size:50" json:"longitude"`
+	OpenTime      string     `gorm:"size:10" json:"open_time"`
+	CloseTime     string     `gorm:"size:10" json:"close_time"`
+	Province      string     `gorm:"size:50" json:"province"`
+	City          string     `gorm:"size:50" json:"city"`
+	District      string     `gorm:"size:50" json:"district"`
+	AreaCode      string     `gorm:"size:20" json:"area_code"`
+	TablesCount   int        `gorm:"default:0" json:"tables_count"`
+	QueueEnabled  bool       `gorm:"default:true" json:"queue_enabled"`
+	ReserveEnabled bool      `gorm:"default:true" json:"reserve_enabled"`
 }
 
 type Printer struct {

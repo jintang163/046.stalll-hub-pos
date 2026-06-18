@@ -26,12 +26,12 @@ const routes = [
         component: () => import('@/views/products/index.vue'),
         meta: { title: '商品管理', icon: 'Goods' }
       },
-      {
-        path: 'orders',
-        name: 'Orders',
-        component: () => import('@/views/orders/index.vue'),
-        meta: { title: '订单管理', icon: 'List' }
-      },
+      // {
+      //   path: 'orders',
+      //   name: 'Orders',
+      //   component: () => import('@/views/orders/index.vue'),
+      //   meta: { title: '订单管理', icon: 'List' }
+      // },
       {
         path: 'members',
         name: 'Members',
@@ -44,12 +44,12 @@ const routes = [
         component: () => import('@/views/coupons/index.vue'),
         meta: { title: '优惠券管理', icon: 'Ticket' }
       },
-      {
-        path: 'inventory',
-        name: 'Inventory',
-        component: () => import('@/views/inventory/index.vue'),
-        meta: { title: '库存管理', icon: 'Box' }
-      },
+      // {
+      //   path: 'inventory',
+      //   name: 'Inventory',
+      //   component: () => import('@/views/inventory/index.vue'),
+      //   meta: { title: '库存管理', icon: 'Box' }
+      // },
       {
         path: 'reports',
         name: 'Reports',
@@ -67,6 +67,30 @@ const routes = [
         name: 'Printers',
         component: () => import('@/views/printers/index.vue'),
         meta: { title: '打印机管理', icon: 'Printer' }
+      },
+      {
+        path: 'queues',
+        name: 'Queues',
+        component: () => import('@/views/queues/index.vue'),
+        meta: { title: '排队管理', icon: 'Tickets' }
+      },
+      {
+        path: 'tables',
+        name: 'Tables',
+        component: () => import('@/views/tables/index.vue'),
+        meta: { title: '桌位管理', icon: 'Table' }
+      },
+      {
+        path: 'reservations',
+        name: 'Reservations',
+        component: () => import('@/views/reservations/index.vue'),
+        meta: { title: '预约管理', icon: 'Calendar' }
+      },
+      {
+        path: 'stores/map',
+        name: 'StoresMap',
+        component: () => import('@/views/stores/map.vue'),
+        meta: { title: '门店地图', icon: 'Location' }
       }
     ]
   }
