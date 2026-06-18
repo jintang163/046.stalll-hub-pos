@@ -21,6 +21,11 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 
 	authHandler := handler.NewAuthHandler()
 	productHandler := handler.NewProductHandler()
+	storeHandler := handler.NewStoreHandler()
+	memberHandler := handler.NewMemberHandler()
+	couponHandler := handler.NewCouponHandler()
+	reportHandler := handler.NewReportHandler()
+	paymentHandler := handler.NewPaymentHandler()
 
 	orderRepo := repository.NewOrderRepository(db)
 	productRepo := repository.NewProductRepository(db)
@@ -78,6 +83,96 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 		sync := api.Group("/sync")
 		{
 			sync.GET("/products", productHandler.Sync)
+		}
+
+		stores := api.Group("/stores")
+		stores.Use(middleware.JWTAuth())
+		{
+			stores.POST("", storeHandler.CreateStore)
+			stores.GET("", storeHandler.ListStores)
+			stores.GET("/:id", storeHandler.GetStore)
+			stores.PUT("/:id", storeHandler.UpdateStore)
+			stores.DELETE("/:id", storeHandler.DeleteStore)
+		}
+
+		printers := api.Group("/printers")
+		printers.Use(middleware.JWTAuth())
+		{
+			printers.POST("", storeHandler.CreatePrinter)
+			printers.GET("", storeHandler.ListPrinters)
+			printers.GET("/:id", storeHandler.GetPrinter)
+			printers.PUT("/:id", storeHandler.UpdatePrinter)
+			printers.DELETE("/:id", storeHandler.DeletePrinter)
+			printers.POST("/test", storeHandler.PrintTest)
+		}
+
+		members := api.Group("/members")
+		members.Use(middleware.JWTAuth())
+		{
+			members.POST("", memberHandler.CreateMember)
+			members.GET("", memberHandler.ListMembers)
+			members.GET("/:id", memberHandler.GetMember)
+			members.PUT("/:id", memberHandler.UpdateMember)
+			members.DELETE("/:id", memberHandler.DeleteMember)
+			members.POST("/:id/points", memberHandler.AdjustPoints)
+			members.POST("/login", memberHandler.MemberLogin)
+		}
+
+		memberLevels := api.Group("/member-levels")
+		memberLevels.Use(middleware.JWTAuth())
+		{
+			memberLevels.POST("", memberHandler.CreateMemberLevel)
+			memberLevels.GET("", memberHandler.ListMemberLevels)
+			memberLevels.GET("/:id", memberHandler.GetMemberLevel)
+			memberLevels.PUT("/:id", memberHandler.UpdateMemberLevel)
+			memberLevels.DELETE("/:id", memberHandler.DeleteMemberLevel)
+		}
+
+		pointsRecords := api.Group("/points-records")
+		pointsRecords.Use(middleware.JWTAuth())
+		{
+			pointsRecords.GET("", memberHandler.ListPointsRecords)
+		}
+
+		coupons := api.Group("/coupons")
+		coupons.Use(middleware.JWTAuth())
+		{
+			coupons.POST("", couponHandler.CreateCoupon)
+			coupons.GET("", couponHandler.ListCoupons)
+			coupons.GET("/:id", couponHandler.GetCoupon)
+			coupons.PUT("/:id", couponHandler.UpdateCoupon)
+			coupons.DELETE("/:id", couponHandler.DeleteCoupon)
+			coupons.POST("/issue", couponHandler.IssueCoupon)
+			coupons.POST("/verify", couponHandler.VerifyCoupon)
+		}
+
+		memberCoupons := api.Group("/member-coupons")
+		memberCoupons.Use(middleware.JWTAuth())
+		{
+			memberCoupons.GET("", couponHandler.ListMemberCoupons)
+			memberCoupons.GET("/:id", couponHandler.GetMemberCoupon)
+		}
+
+		reports := api.Group("/reports")
+		reports.Use(middleware.JWTAuth())
+		{
+			reports.GET("/overview", reportHandler.GetOverview)
+			reports.GET("/daily", reportHandler.GetDailyReports)
+			reports.POST("/daily/generate", reportHandler.GenerateDailyReport)
+			reports.GET("/product-sales", reportHandler.GetProductSalesReport)
+			reports.GET("/category-sales", reportHandler.GetCategorySalesReport)
+			reports.GET("/hourly-sales", reportHandler.GetHourlySalesReport)
+			reports.GET("/payment", reportHandler.GetPaymentReport)
+			reports.POST("/export", reportHandler.ExportReport)
+		}
+
+		wechat := api.Group("/payment/wechat")
+		{
+			wechat.POST("/unified-order", middleware.JWTAuth(), paymentHandler.WechatUnifiedOrder)
+			wechat.GET("/order/:orderNo", middleware.JWTAuth(), paymentHandler.WechatQueryOrder)
+			wechat.POST("/refund", middleware.JWTAuth(), paymentHandler.WechatRefund)
+			wechat.POST("/notify", paymentHandler.WechatNotify)
+			wechat.POST("/refund/notify", paymentHandler.WechatRefundNotify)
 		}
 	}
 

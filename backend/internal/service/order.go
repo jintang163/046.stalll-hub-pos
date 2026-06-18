@@ -76,9 +76,6 @@ func (s *OrderService) Create(req *dto.CreateOrderRequest) (*dto.CreateOrderResp
 		if sku.Status != 1 {
 			return nil, errors.New("SKU is offline")
 		}
-		if sku.Stock < item.Quantity {
-			return nil, fmt.Errorf("insufficient stock for SKU %s", sku.Name)
-		}
 
 		product, err := s.productRepo.GetByID(item.ProductID)
 		if err != nil {
@@ -153,6 +150,7 @@ func (s *OrderService) Create(req *dto.CreateOrderRequest) (*dto.CreateOrderResp
 			"order_id":    order.ID,
 			"order_no":    order.OrderNo,
 			"store_id":    order.StoreID,
+			"member_id":   order.MemberID,
 			"order_type":  order.OrderType,
 			"pay_amount":  order.PayAmount.String(),
 			"item_count":  len(order.Items),

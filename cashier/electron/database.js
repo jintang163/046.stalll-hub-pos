@@ -3,12 +3,16 @@ const path = require('path')
 const fs = require('fs')
 
 class SQLiteDatabase {
-  constructor(userDataPath) {
-    this.dbPath = path.join(userDataPath, 'pos.db')
+  constructor(dbPath) {
+    this.dbPath = dbPath
     this.db = null
   }
 
-  init() {
+  init(dbPath) {
+    if (dbPath) {
+      this.dbPath = dbPath
+    }
+
     const dbDir = path.dirname(this.dbPath)
     if (!fs.existsSync(dbDir)) {
       fs.mkdirSync(dbDir, { recursive: true })
@@ -17,6 +21,7 @@ class SQLiteDatabase {
     this.db = new Database(this.dbPath)
     this.db.pragma('journal_mode = WAL')
     this.db.pragma('foreign_keys = ON')
+    this.db.pragma('synchronous = NORMAL')
     this.createTables()
     this.createIndexes()
   }
@@ -48,7 +53,7 @@ class SQLiteDatabase {
         FOREIGN KEY (category_id) REFERENCES categories(id)
       )`,
       
-      `CREATE TABLE IF NOT EXISTS product_skus (
+      `CREATE TABLE IF NOT EXISTS skus (
         id INTEGER PRIMARY KEY,
         product_id INTEGER NOT NULL,
         sku_code TEXT,
@@ -63,7 +68,7 @@ class SQLiteDatabase {
         FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
       )`,
       
-      `CREATE TABLE IF NOT EXISTS product_attributes (
+      `CREATE TABLE IF NOT EXISTS attributes (
         id INTEGER PRIMARY KEY,
         product_id INTEGER NOT NULL,
         name TEXT NOT NULL,
@@ -84,7 +89,17 @@ class SQLiteDatabase {
         status INTEGER DEFAULT 1,
         created_at TEXT,
         updated_at TEXT,
-        FOREIGN KEY (attribute_id) REFERENCES product_attributes(id) ON DELETE CASCADE
+        FOREIGN KEY (attribute_id) REFERENCES attributes(id) ON DELETE CASCADE
+      )`,
+      
+      `CREATE TABLE IF NOT EXISTS product_attributes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id INTEGER NOT NULL,
+        attribute_id INTEGER NOT NULL,
+        created_at TEXT,
+        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+        FOREIGN KEY (attribute_id) REFERENCES attributes(id) ON DELETE CASCADE,
+        UNIQUE(product_id, attribute_id)
       )`,
       
       `CREATE TABLE IF NOT EXISTS orders (
@@ -108,26 +123,17 @@ class SQLiteDatabase {
         paid_at TEXT
       )`,
       
-      `CREATE TABLE IF NOT EXISTS order_items (
+      `CREATE TABLE IF NOT EXISTS sync_records (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        order_no TEXT NOT NULL,
-        product_id INTEGER,
-        product_name TEXT,
-        sku_id INTEGER,
-        sku_name TEXT,
-        attribute_ids TEXT,
-        attribute_names TEXT,
-        price REAL DEFAULT 0,
-        quantity INTEGER DEFAULT 1,
-        subtotal REAL DEFAULT 0,
-        remark TEXT,
-        created_at TEXT,
-        FOREIGN KEY (order_no) REFERENCES orders(order_no) ON DELETE CASCADE
-      )`,
-      
-      `CREATE TABLE IF NOT EXISTS sync_config (
-        key TEXT PRIMARY KEY,
-        value TEXT
+        sync_type TEXT NOT NULL,
+        status TEXT NOT NULL,
+        total_count INTEGER DEFAULT 0,
+        success_count INTEGER DEFAULT 0,
+        fail_count INTEGER DEFAULT 0,
+        start_time TEXT,
+        end_time TEXT,
+        error_message TEXT,
+        created_at TEXT
       )`
     ]
 
@@ -138,17 +144,143 @@ class SQLiteDatabase {
     const indexes = [
       'CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id)',
       'CREATE INDEX IF NOT EXISTS idx_products_status ON products(status)',
-      'CREATE INDEX IF NOT EXISTS idx_skus_product ON product_skus(product_id)',
-      'CREATE INDEX IF NOT EXISTS idx_skus_status ON product_skus(status)',
-      'CREATE INDEX IF NOT EXISTS idx_attr_product ON product_attributes(product_id)',
+      'CREATE INDEX IF NOT EXISTS idx_skus_product ON skus(product_id)',
+      'CREATE INDEX IF NOT EXISTS idx_skus_status ON skus(status)',
+      'CREATE INDEX IF NOT EXISTS idx_skus_code ON skus(sku_code)',
+      'CREATE INDEX IF NOT EXISTS idx_attributes_product ON attributes(product_id)',
       'CREATE INDEX IF NOT EXISTS idx_attr_values_attr ON attribute_values(attribute_id)',
+      'CREATE INDEX IF NOT EXISTS idx_product_attr_product ON product_attributes(product_id)',
       'CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)',
       'CREATE INDEX IF NOT EXISTS idx_orders_synced ON orders(synced)',
       'CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at)',
-      'CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_no)'
+      'CREATE INDEX IF NOT EXISTS idx_orders_paid ON orders(paid_at)',
+      'CREATE INDEX IF NOT EXISTS idx_sync_records_type ON sync_records(sync_type)',
+      'CREATE INDEX IF NOT EXISTS idx_sync_records_status ON sync_records(status)',
+      'CREATE INDEX IF NOT EXISTS idx_sync_records_time ON sync_records(start_time)'
     ]
 
     indexes.forEach(sql => this.db.exec(sql))
+  }
+
+  insert(table, data) {
+    const columns = Object.keys(data)
+    const placeholders = columns.map(() => '?').join(', ')
+    const values = columns.map(col => data[col])
+    const sql = `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders})`
+    const stmt = this.db.prepare(sql)
+    const result = stmt.run(...values)
+    return { success: true, id: result.lastInsertRowid, changes: result.changes }
+  }
+
+  update(table, data, where, whereParams = []) {
+    const columns = Object.keys(data)
+    const setClause = columns.map(col => `${col} = ?`).join(', ')
+    const values = [...columns.map(col => data[col]), ...whereParams]
+    const sql = `UPDATE ${table} SET ${setClause} WHERE ${where}`
+    const stmt = this.db.prepare(sql)
+    const result = stmt.run(...values)
+    return { success: true, changes: result.changes }
+  }
+
+  delete(table, where, whereParams = []) {
+    const sql = `DELETE FROM ${table} WHERE ${where}`
+    const stmt = this.db.prepare(sql)
+    const result = stmt.run(...whereParams)
+    return { success: true, changes: result.changes }
+  }
+
+  query(sql, params = []) {
+    const stmt = this.db.prepare(sql)
+    return stmt.all(...params)
+  }
+
+  queryOne(sql, params = []) {
+    const stmt = this.db.prepare(sql)
+    return stmt.get(...params)
+  }
+
+  transaction(callback) {
+    const tx = this.db.transaction(callback)
+    return tx()
+  }
+
+  batchInsert(table, dataList) {
+    if (!dataList || dataList.length === 0) {
+      return { success: true, count: 0 }
+    }
+
+    const columns = Object.keys(dataList[0])
+    const placeholders = columns.map(() => '?').join(', ')
+    const sql = `INSERT OR REPLACE INTO ${table} (${columns.join(', ')}) VALUES (${placeholders})`
+    const stmt = this.db.prepare(sql)
+
+    const tx = this.db.transaction((items) => {
+      let count = 0
+      for (const data of items) {
+        const values = columns.map(col => data[col])
+        stmt.run(...values)
+        count++
+      }
+      return count
+    })
+
+    const count = tx(dataList)
+    return { success: true, count }
+  }
+
+  batchUpdate(table, dataList, whereFields) {
+    if (!dataList || dataList.length === 0) {
+      return { success: true, count: 0 }
+    }
+
+    const tx = this.db.transaction((items) => {
+      let count = 0
+      for (const data of items) {
+        const updateData = { ...data }
+        const whereClauses = []
+        const whereParams = []
+
+        for (const field of whereFields) {
+          whereClauses.push(`${field} = ?`)
+          whereParams.push(data[field])
+          delete updateData[field]
+        }
+
+        const columns = Object.keys(updateData)
+        const setClause = columns.map(col => `${col} = ?`).join(', ')
+        const values = [...columns.map(col => updateData[col]), ...whereParams]
+        const sql = `UPDATE ${table} SET ${setClause} WHERE ${whereClauses.join(' AND ')}`
+        const stmt = this.db.prepare(sql)
+        const result = stmt.run(...values)
+        count += result.changes
+      }
+      return count
+    })
+
+    const count = tx(dataList)
+    return { success: true, count }
+  }
+
+  batchDelete(table, whereField, ids) {
+    if (!ids || ids.length === 0) {
+      return { success: true, count: 0 }
+    }
+
+    const placeholders = ids.map(() => '?').join(', ')
+    const sql = `DELETE FROM ${table} WHERE ${whereField} IN (${placeholders})`
+    const stmt = this.db.prepare(sql)
+
+    const tx = this.db.transaction(() => {
+      const result = stmt.run(...ids)
+      return result.changes
+    })
+
+    const count = tx()
+    return { success: true, count }
+  }
+
+  select(table) {
+    return new QueryBuilder(this.db, table)
   }
 
   getProducts() {
@@ -171,9 +303,9 @@ class SQLiteDatabase {
     const product = this.db.prepare('SELECT * FROM products WHERE id = ?').get(id)
     if (!product) return null
 
-    const skus = this.db.prepare('SELECT * FROM product_skus WHERE product_id = ?').all(id)
+    const skus = this.db.prepare('SELECT * FROM skus WHERE product_id = ?').all(id)
     const attributes = this.db.prepare(`
-      SELECT pa.*, 
+      SELECT a.*, 
              json_group_array(json_object(
                'id', av.id,
                'value', av.value,
@@ -182,11 +314,11 @@ class SQLiteDatabase {
                'sort_order', av.sort_order,
                'status', av.status
              )) as values
-      FROM product_attributes pa
-      LEFT JOIN attribute_values av ON av.attribute_id = pa.id
-      WHERE pa.product_id = ?
-      GROUP BY pa.id
-      ORDER BY pa.sort_order
+      FROM attributes a
+      LEFT JOIN attribute_values av ON av.attribute_id = a.id
+      WHERE a.product_id = ?
+      GROUP BY a.id
+      ORDER BY a.sort_order
     `).all(id)
 
     return {
@@ -208,12 +340,12 @@ class SQLiteDatabase {
   }
 
   getSKUs(productId) {
-    return this.db.prepare('SELECT * FROM product_skus WHERE product_id = ? ORDER BY id').all(productId)
+    return this.db.prepare('SELECT * FROM skus WHERE product_id = ? ORDER BY id').all(productId)
   }
 
   getAttributes(productId) {
     const attrs = this.db.prepare(`
-      SELECT pa.*, 
+      SELECT a.*, 
              json_group_array(json_object(
                'id', av.id,
                'value', av.value,
@@ -222,11 +354,11 @@ class SQLiteDatabase {
                'sort_order', av.sort_order,
                'status', av.status
              )) as values
-      FROM product_attributes pa
-      LEFT JOIN attribute_values av ON av.attribute_id = pa.id
-      WHERE pa.product_id = ?
-      GROUP BY pa.id
-      ORDER BY pa.sort_order
+      FROM attributes a
+      LEFT JOIN attribute_values av ON av.attribute_id = a.id
+      WHERE a.product_id = ?
+      GROUP BY a.id
+      ORDER BY a.sort_order
     `).all(productId)
 
     return attrs.map(a => ({
@@ -244,20 +376,20 @@ class SQLiteDatabase {
       `)
 
       const insertSKU = this.db.prepare(`
-        INSERT OR REPLACE INTO product_skus 
+        INSERT OR REPLACE INTO skus 
         (id, product_id, sku_code, spec_name, price, original_price, stock, image, status, created_at, updated_at)
         VALUES (@id, @product_id, @sku_code, @spec_name, @price, @original_price, @stock, @image, @status, @created_at, @updated_at)
       `)
 
-      const deleteSKUs = this.db.prepare('DELETE FROM product_skus WHERE product_id = ?')
+      const deleteSKUs = this.db.prepare('DELETE FROM skus WHERE product_id = ?')
       
       const insertAttr = this.db.prepare(`
-        INSERT OR REPLACE INTO product_attributes 
+        INSERT OR REPLACE INTO attributes 
         (id, product_id, name, sort_order, status, created_at, updated_at)
         VALUES (@id, @product_id, @name, @sort_order, @status, @created_at, @updated_at)
       `)
 
-      const deleteAttrs = this.db.prepare('DELETE FROM product_attributes WHERE product_id = ?')
+      const deleteAttrs = this.db.prepare('DELETE FROM attributes WHERE product_id = ?')
       
       const insertAttrValue = this.db.prepare(`
         INSERT OR REPLACE INTO attribute_values 
@@ -267,7 +399,7 @@ class SQLiteDatabase {
 
       const deleteAttrValues = this.db.prepare(`
         DELETE FROM attribute_values WHERE attribute_id IN 
-        (SELECT id FROM product_attributes WHERE product_id = ?)
+        (SELECT id FROM attributes WHERE product_id = ?)
       `)
 
       products.forEach(p => {
@@ -368,7 +500,7 @@ class SQLiteDatabase {
   }
 
   updateStock(skuId, stock) {
-    const result = this.db.prepare('UPDATE product_skus SET stock = ? WHERE id = ?').run(stock, skuId)
+    const result = this.db.prepare('UPDATE skus SET stock = ? WHERE id = ?').run(stock, skuId)
     return { success: result.changes > 0 }
   }
 
@@ -379,9 +511,10 @@ class SQLiteDatabase {
 
   deleteProduct(productId) {
     const tx = this.db.transaction(() => {
-      this.db.prepare('DELETE FROM attribute_values WHERE attribute_id IN (SELECT id FROM product_attributes WHERE product_id = ?)').run(productId)
+      this.db.prepare('DELETE FROM attribute_values WHERE attribute_id IN (SELECT id FROM attributes WHERE product_id = ?)').run(productId)
       this.db.prepare('DELETE FROM product_attributes WHERE product_id = ?').run(productId)
-      this.db.prepare('DELETE FROM product_skus WHERE product_id = ?').run(productId)
+      this.db.prepare('DELETE FROM attributes WHERE product_id = ?').run(productId)
+      this.db.prepare('DELETE FROM skus WHERE product_id = ?').run(productId)
       this.db.prepare('DELETE FROM products WHERE id = ?').run(productId)
     })
 
@@ -389,11 +522,17 @@ class SQLiteDatabase {
     return { success: true }
   }
 
+  deleteCategory(categoryId) {
+    const result = this.db.prepare('DELETE FROM categories WHERE id = ?').run(categoryId)
+    return { success: result.changes > 0 }
+  }
+
   clearAllProducts() {
     const tx = this.db.transaction(() => {
       this.db.exec('DELETE FROM attribute_values')
       this.db.exec('DELETE FROM product_attributes')
-      this.db.exec('DELETE FROM product_skus')
+      this.db.exec('DELETE FROM attributes')
+      this.db.exec('DELETE FROM skus')
       this.db.exec('DELETE FROM products')
       this.db.exec('DELETE FROM categories')
     })
@@ -532,10 +671,172 @@ class SQLiteDatabase {
     return { success: true }
   }
 
+  createSyncRecord(record) {
+    const result = this.db.prepare(`
+      INSERT INTO sync_records 
+      (sync_type, status, total_count, success_count, fail_count, start_time, end_time, error_message, created_at)
+      VALUES (@sync_type, @status, @total_count, @success_count, @fail_count, @start_time, @end_time, @error_message, @created_at)
+    `).run({
+      sync_type: record.sync_type,
+      status: record.status,
+      total_count: record.total_count || 0,
+      success_count: record.success_count || 0,
+      fail_count: record.fail_count || 0,
+      start_time: record.start_time,
+      end_time: record.end_time || null,
+      error_message: record.error_message || null,
+      created_at: record.created_at || new Date().toISOString()
+    })
+    return { success: true, id: result.lastInsertRowid }
+  }
+
+  updateSyncRecord(id, updates) {
+    const columns = Object.keys(updates)
+    const setClause = columns.map(col => `${col} = ?`).join(', ')
+    const values = [...columns.map(col => updates[col]), id]
+    const result = this.db.prepare(`UPDATE sync_records SET ${setClause} WHERE id = ?`).run(...values)
+    return { success: result.changes > 0 }
+  }
+
+  getSyncRecords(limit = 20) {
+    return this.db.prepare('SELECT * FROM sync_records ORDER BY start_time DESC LIMIT ?').all(limit)
+  }
+
+  raw(sql, params = []) {
+    return this.db.exec(sql, params)
+  }
+
   close() {
     if (this.db) {
       this.db.close()
+      this.db = null
     }
+  }
+}
+
+class QueryBuilder {
+  constructor(db, table) {
+    this.db = db
+    this.table = table
+    this._columns = ['*']
+    this._where = []
+    this._params = []
+    this._order = null
+    this._limit = null
+    this._offset = null
+    this._join = []
+  }
+
+  select(...columns) {
+    this._columns = columns
+    return this
+  }
+
+  where(condition, params = []) {
+    this._where.push(condition)
+    this._params.push(...params)
+    return this
+  }
+
+  andWhere(condition, params = []) {
+    return this.where(condition, params)
+  }
+
+  orderBy(column, direction = 'ASC') {
+    this._order = `${column} ${direction}`
+    return this
+  }
+
+  limit(limit) {
+    this._limit = limit
+    return this
+  }
+
+  offset(offset) {
+    this._offset = offset
+    return this
+  }
+
+  join(table, on) {
+    this._join.push(`JOIN ${table} ON ${on}`)
+    return this
+  }
+
+  leftJoin(table, on) {
+    this._join.push(`LEFT JOIN ${table} ON ${on}`)
+    return this
+  }
+
+  _buildQuery() {
+    let sql = `SELECT ${this._columns.join(', ')} FROM ${this.table}`
+
+    if (this._join.length > 0) {
+      sql += ' ' + this._join.join(' ')
+    }
+
+    if (this._where.length > 0) {
+      sql += ' WHERE ' + this._where.join(' AND ')
+    }
+
+    if (this._order) {
+      sql += ' ORDER BY ' + this._order
+    }
+
+    if (this._limit !== null) {
+      sql += ' LIMIT ' + this._limit
+    }
+
+    if (this._offset !== null) {
+      sql += ' OFFSET ' + this._offset
+    }
+
+    return sql
+  }
+
+  get() {
+    const sql = this._buildQuery()
+    const stmt = this.db.prepare(sql)
+    return stmt.all(...this._params)
+  }
+
+  first() {
+    const sql = this._buildQuery()
+    const stmt = this.db.prepare(sql)
+    return stmt.get(...this._params)
+  }
+
+  count() {
+    const sql = `SELECT COUNT(*) as count FROM ${this.table}` + 
+                (this._where.length > 0 ? ' WHERE ' + this._where.join(' AND ') : '')
+    const stmt = this.db.prepare(sql)
+    const result = stmt.get(...this._params)
+    return result ? result.count : 0
+  }
+
+  insert(data) {
+    const columns = Object.keys(data)
+    const placeholders = columns.map(() => '?').join(', ')
+    const values = columns.map(col => data[col])
+    const sql = `INSERT INTO ${this.table} (${columns.join(', ')}) VALUES (${placeholders})`
+    const stmt = this.db.prepare(sql)
+    return stmt.run(...values)
+  }
+
+  update(data) {
+    const columns = Object.keys(data)
+    const setClause = columns.map(col => `${col} = ?`).join(', ')
+    const values = [...columns.map(col => data[col]), ...this._params]
+    const sql = `UPDATE ${this.table} SET ${setClause}` + 
+                (this._where.length > 0 ? ' WHERE ' + this._where.join(' AND ') : '')
+    const stmt = this.db.prepare(sql)
+    return stmt.run(...values)
+  }
+
+  delete() {
+    const sql = `DELETE FROM ${this.table}` + 
+                (this._where.length > 0 ? ' WHERE ' + this._where.join(' AND ') : '')
+    const stmt = this.db.prepare(sql)
+    return stmt.run(...this._params)
   }
 }
 

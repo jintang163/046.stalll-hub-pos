@@ -1,4 +1,4 @@
-module stalll-hub-pos
+module stalll-hub-pos/backend
 
 go 1.21
 

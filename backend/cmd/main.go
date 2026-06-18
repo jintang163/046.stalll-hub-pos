@@ -5,6 +5,7 @@ import (
 	"log"
 	"stalll-hub-pos/backend/config"
 	"stalll-hub-pos/backend/internal/api"
+	"stalll-hub-pos/backend/internal/consumer"
 	"stalll-hub-pos/backend/internal/model"
 	"stalll-hub-pos/backend/pkg/database"
 	"stalll-hub-pos/backend/pkg/minio"
@@ -59,12 +60,13 @@ func main() {
 
 	r := api.SetupRouter(database.DB, nsq.Producer)
 
+	defer nsq.StopProducer()
+	defer nsq.StopConsumers()
+
 	log.Printf("Server starting on port %s", config.AppConfig.Server.Port)
 	if err := r.Run(fmt.Sprintf(":%s", config.AppConfig.Server.Port)); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
-
-	defer nsq.StopProducer()
 }
 
 func initDefaultData() {
@@ -102,56 +104,8 @@ func initDefaultData() {
 }
 
 func initNSQConsumers() {
-	consumerConfigs := []nsq.ConsumerConfig{
-		{
-			Topic:   nsq.TopicOrderCreated,
-			Channel: "order_create_channel",
-			Handler: &OrderCreateHandler{},
-		},
-		{
-			Topic:   nsq.TopicOrderPaid,
-			Channel: "order_pay_channel",
-			Handler: &OrderPayHandler{},
-		},
-		{
-			Topic:   nsq.TopicOrderRefund,
-			Channel: "order_refund_channel",
-			Handler: &OrderRefundHandler{},
-		},
-		{
-			Topic:   nsq.TopicProductChanged,
-			Channel: "product_change_channel",
-			Handler: &ProductChangeHandler{},
-		},
+	if err := consumer.InitAllConsumers(); err != nil {
+		log.Fatalf("Failed to initialize NSQ consumers: %v", err)
 	}
-
-	nsq.InitConsumer(consumerConfigs)
-}
-
-type OrderCreateHandler struct{}
-
-func (h *OrderCreateHandler) HandleMessage(m *nsq.Message) error {
-	log.Printf("[NSQ] Order created: %s", string(m.Body))
-	return nil
-}
-
-type OrderPayHandler struct{}
-
-func (h *OrderPayHandler) HandleMessage(m *nsq.Message) error {
-	log.Printf("[NSQ] Order paid: %s", string(m.Body))
-	return nil
-}
-
-type OrderRefundHandler struct{}
-
-func (h *OrderRefundHandler) HandleMessage(m *nsq.Message) error {
-	log.Printf("[NSQ] Order refund: %s", string(m.Body))
-	return nil
-}
-
-type ProductChangeHandler struct{}
-
-func (h *ProductChangeHandler) HandleMessage(m *nsq.Message) error {
-	log.Printf("[NSQ] Product changed: %s", string(m.Body))
-	return nil
+	log.Println("All NSQ consumers initialized successfully")
 }

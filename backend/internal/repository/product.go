@@ -104,6 +104,40 @@ func (r *ProductRepository) UpdateSKUStock(skuID uint, stock int) (int, error) {
 	return oldStock, err
 }
 
+func (r *ProductRepository) DecreaseStockWithOptimisticLock(skuID uint, quantity int) (int, int, error) {
+	var sku model.ProductSKU
+	if err := r.db.First(&sku, skuID).Error; err != nil {
+		return 0, 0, err
+	}
+
+	oldStock := sku.Stock
+	if oldStock < quantity {
+		return oldStock, oldStock, nil
+	}
+
+	newStock := oldStock - quantity
+	result := r.db.Model(&model.ProductSKU{}).
+		Where("id = ? AND stock = ?", skuID, oldStock).
+		Update("stock", newStock)
+
+	if result.Error != nil {
+		return oldStock, oldStock, result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return oldStock, oldStock, nil
+	}
+
+	soldCount := oldStock - newStock
+	if soldCount > 0 {
+		r.db.Model(&model.ProductSKU{}).
+			Where("id = ?", skuID).
+			UpdateColumn("sold_count", gorm.Expr("sold_count + ?", soldCount))
+	}
+
+	return oldStock, newStock, nil
+}
+
 func (r *ProductRepository) CreateAttribute(attr *model.ProductAttribute) error {
 	return r.db.Create(attr).Error
 }
