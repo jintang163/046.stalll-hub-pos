@@ -1,0 +1,251 @@
+.container {
+  min-height: 100vh;
+  background: #f5f7fa;
+}
+
+.scrollContent {
+  min-height: 100vh;
+}
+
+.loginContainer {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 120rpx 48rpx;
+}
+
+.loginHeader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 120rpx;
+}
+
+.loginIcon {
+  font-size: 120rpx;
+  margin-bottom: 32rpx;
+}
+
+.loginTitle {
+  font-size: 48rpx;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 16rpx;
+}
+
+.loginDesc {
+  font-size: 28rpx;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.loginButtons {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+  margin-bottom: 60rpx;
+}
+
+.wxLoginBtn {
+  width: 100%;
+  background: #fff;
+  border-radius: 60rpx;
+  padding: 28rpx;
+}
+
+.wxLoginText {
+  color: #667eea;
+  font-size: 32rpx;
+  font-weight: 600;
+}
+
+.phoneLoginBtn {
+  width: 100%;
+  padding: 28rpx;
+  border: 2rpx solid rgba(255, 255, 255, 0.5);
+  border-radius: 60rpx;
+  text-align: center;
+}
+
+.phoneLoginText {
+  color: #fff;
+  font-size: 32rpx;
+}
+
+.loginAgreement {
+  margin-top: auto;
+}
+
+.agreementText {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.agreementLink {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.userHeader {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 60rpx 32rpx 40rpx;
+}
+
+.userInfo {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+}
+
+.avatar {
+  width: 140rpx;
+  height: 140rpx;
+  border-radius: 50%;
+  border: 4rpx solid rgba(255, 255, 255, 0.3);
+  object-fit: cover;
+}
+
+.userInfoText {
+  flex: 1;
+}
+
+.nickname {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #fff;
+  display: block;
+  margin-bottom: 12rpx;
+}
+
+.memberInfo {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+}
+
+.level {
+  padding: 6rpx 20rpx;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  font-size: 22rpx;
+  border-radius: 20rpx;
+}
+
+.points {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.statsCard {
+  display: flex;
+  align-items: center;
+  background: #fff;
+  margin: -20rpx 24rpx 20rpx;
+  border-radius: 16rpx;
+  padding: 32rpx;
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.08);
+  position: relative;
+  z-index: 10;
+}
+
+.statItem {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.statValue {
+  font-size: 40rpx;
+  font-weight: 700;
+  color: #333;
+}
+
+.statLabel {
+  font-size: 24rpx;
+  color: #999;
+}
+
+.statDivider {
+  width: 1rpx;
+  height: 60rpx;
+  background: #f0f0f0;
+}
+
+.storeCard {
+  background: #fff;
+  margin: 0 24rpx 20rpx;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.storeInfo {
+  flex: 1;
+}
+
+.storeLabel {
+  font-size: 24rpx;
+  color: #999;
+  display: block;
+  margin-bottom: 8rpx;
+}
+
+.storeName {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #333;
+  display: block;
+  margin-bottom: 4rpx;
+}
+
+.storeAddress {
+  font-size: 24rpx;
+  color: #999;
+}
+
+.storeArrow {
+  font-size: 24rpx;
+  color: #ccc;
+}
+
+.menuList {
+  background: #fff;
+  margin: 0 24rpx 20rpx;
+  border-radius: 16rpx;
+  overflow: hidden;
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 8rpx 0;
+}
+
+.menuIcon {
+  font-size: 32rpx;
+}
+
+.menuTitle {
+  font-size: 28rpx;
+  color: #333;
+}
+
+.logoutBtn {
+  margin: 40rpx 24rpx;
+  padding: 28rpx;
+  background: #fff;
+  border-radius: 16rpx;
+  text-align: center;
+}
+
+.logoutText {
+  font-size: 30rpx;
+  color: #f56c6c;
+  font-weight: 500;
+}

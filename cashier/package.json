@@ -1,0 +1,57 @@
+{
+  "name": "stalll-hub-pos-cashier",
+  "version": "1.0.0",
+  "description": "大排档餐饮系统 - 收银端",
+  "main": "electron/main.js",
+  "author": "stalll-hub",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "electron:dev": "concurrently -k \"vite\" \"wait-on http://localhost:5174 && cross-env NODE_ENV=development electron .\"",
+    "electron:build": "vite build && electron-builder",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "vue": "^3.4.0",
+    "vue-router": "^4.2.5",
+    "pinia": "^2.1.7",
+    "element-plus": "^2.4.4",
+    "axios": "^1.6.2",
+    "nsqjs": "^0.13.0",
+    "better-sqlite3": "^9.2.2",
+    "dayjs": "^1.11.10",
+    "lodash": "^4.17.21",
+    "uuid": "^9.0.1",
+    "electron-store": "^8.1.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.0",
+    "vite": "^5.0.0",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
+    "concurrently": "^8.2.2",
+    "wait-on": "^7.2.0",
+    "cross-env": "^7.0.3",
+    "sass": "^1.69.5"
+  },
+  "build": {
+    "appId": "com.stalllhub.pos",
+    "productName": "大排档收银系统",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "public/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

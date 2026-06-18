@@ -1,0 +1,41 @@
+server:
+  port: 8080
+  mode: debug
+
+database:
+  host: 127.0.0.1
+  port: 3306
+  user: root
+  password: root123456
+  dbname: stall_hub_pos
+  charset: utf8mb4
+  max_open_conns: 100
+  max_idle_conns: 10
+
+redis:
+  host: 127.0.0.1
+  port: 6379
+  password: ""
+  db: 0
+  pool_size: 100
+
+nsq:
+  lookupd_address: 127.0.0.1:4161
+  nsqd_address: 127.0.0.1:4150
+
+minio:
+  endpoint: 127.0.0.1:9000
+  access_key: minioadmin
+  secret_key: minioadmin
+  use_ssl: false
+  bucket: stall-hub-pos
+
+jwt:
+  secret: stall-hub-pos-secret-key
+  expire_hours: 24
+
+wechat:
+  app_id: your_app_id
+  app_secret: your_app_secret
+  mch_id: your_mch_id
+  api_key: your_api_key

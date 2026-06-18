@@ -1,0 +1,226 @@
+.container {
+  min-height: 100vh;
+  background: #f5f7fa;
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+}
+
+.emptyText {
+  font-size: 28rpx;
+  color: #999;
+}
+
+.orderList {
+  height: calc(100vh - 200rpx);
+  padding: 20rpx;
+}
+
+.orderCard {
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 20rpx;
+}
+
+.orderHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16rpx;
+  padding-bottom: 16rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.orderNo {
+  font-size: 24rpx;
+  color: #999;
+}
+
+.orderStatus {
+  font-size: 26rpx;
+  font-weight: 500;
+}
+
+.orderInfo {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  margin-bottom: 16rpx;
+}
+
+.infoLabel {
+  font-size: 24rpx;
+  color: #999;
+}
+
+.infoValue {
+  font-size: 24rpx;
+  color: #333;
+  font-weight: 500;
+}
+
+.orderItems {
+  margin-bottom: 16rpx;
+}
+
+.orderItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8rpx 0;
+}
+
+.itemName {
+  flex: 1;
+  font-size: 26rpx;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.itemQty {
+  font-size: 24rpx;
+  color: #999;
+  margin: 0 16rpx;
+}
+
+.itemPrice {
+  font-size: 26rpx;
+  color: #f56c6c;
+  font-weight: 500;
+}
+
+.moreItems {
+  font-size: 24rpx;
+  color: #999;
+  padding: 8rpx 0;
+}
+
+.orderFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 16rpx;
+  border-top: 1rpx solid #f0f0f0;
+}
+
+.orderTotal {
+  display: flex;
+  align-items: baseline;
+}
+
+.totalLabel {
+  font-size: 24rpx;
+  color: #666;
+}
+
+.totalSymbol {
+  font-size: 22rpx;
+  color: #f56c6c;
+}
+
+.totalValue {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #f56c6c;
+}
+
+.orderActions {
+  display: flex;
+  gap: 16rpx;
+}
+
+.actionBtnPrimary {
+  padding: 12rpx 28rpx;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 40rpx;
+}
+
+.actionTextPrimary {
+  color: #fff;
+  font-size: 24rpx;
+  font-weight: 500;
+}
+
+.actionBtnSecondary {
+  padding: 12rpx 28rpx;
+  background: #f5f7fa;
+  border-radius: 40rpx;
+}
+
+.actionTextSecondary {
+  color: #666;
+  font-size: 24rpx;
+}
+
+.loadingMore {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  padding: 32rpx;
+}
+
+.loadingText {
+  font-size: 24rpx;
+  color: #999;
+}
+
+.noMore {
+  text-align: center;
+  padding: 32rpx;
+}
+
+.noMoreText {
+  font-size: 24rpx;
+  color: #ccc;
+}
+
+.dialogFooter {
+  display: flex;
+  gap: 20rpx;
+  padding: 20rpx;
+}
+
+.dialogBtn {
+  flex: 1;
+  padding: 20rpx;
+  text-align: center;
+  background: #f5f7fa;
+  border-radius: 12rpx;
+}
+
+.dialogBtnPrimary {
+  flex: 1;
+  padding: 20rpx;
+  text-align: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12rpx;
+}
+
+.refundForm {
+  padding: 20rpx 0;
+}
+
+.formLabel {
+  font-size: 28rpx;
+  color: #333;
+  margin-bottom: 16rpx;
+  display: block;
+}
+
+.formTextarea {
+  width: 100%;
+  min-height: 160rpx;
+  padding: 16rpx;
+  border: 1rpx solid #e0e0e0;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+  box-sizing: border-box;
+}

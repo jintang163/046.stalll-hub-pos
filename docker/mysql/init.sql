@@ -1,0 +1,7 @@
+CREATE DATABASE IF NOT EXISTS stalll_pos DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+USE stalll_pos;
+
+CREATE USER IF NOT EXISTS 'stalll'@'%' IDENTIFIED BY 'stalll123';
+GRANT ALL PRIVILEGES ON stalll_pos.* TO 'stalll'@'%';
+FLUSH PRIVILEGES;

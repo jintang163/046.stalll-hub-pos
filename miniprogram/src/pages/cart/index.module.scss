@@ -1,0 +1,287 @@
+.container {
+  min-height: 100vh;
+  background: #f5f7fa;
+  padding-bottom: 120rpx;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 80vh;
+  gap: 24rpx;
+}
+
+.emptyIcon {
+  font-size: 120rpx;
+  opacity: 0.5;
+}
+
+.emptyText {
+  font-size: 28rpx;
+  color: #999;
+}
+
+.emptyBtn {
+  margin-top: 20rpx;
+  padding: 20rpx 60rpx;
+}
+
+.storeBar {
+  background: #fff;
+  padding: 24rpx 32rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.storeName {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.tableInfo {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.tableLabel {
+  font-size: 26rpx;
+  color: #666;
+}
+
+.tableValue {
+  font-size: 26rpx;
+  color: #667eea;
+  font-weight: 500;
+}
+
+.tableArrow {
+  font-size: 20rpx;
+  color: #999;
+}
+
+.cartList {
+  height: calc(100vh - 260rpx);
+  padding: 20rpx;
+}
+
+.cartItem {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  padding: 24rpx;
+  background: #fff;
+  border-radius: 16rpx;
+  margin-bottom: 16rpx;
+}
+
+.checkbox {
+  flex-shrink: 0;
+}
+
+.itemImage {
+  width: 140rpx;
+  height: 140rpx;
+  border-radius: 12rpx;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.itemInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.itemName {
+  font-size: 28rpx;
+  font-weight: 500;
+  color: #333;
+  display: block;
+  margin-bottom: 8rpx;
+}
+
+.itemSpec {
+  font-size: 22rpx;
+  color: #999;
+  display: block;
+  margin-bottom: 16rpx;
+}
+
+.itemBottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.itemPrice {
+  display: flex;
+  align-items: baseline;
+}
+
+.priceSymbol {
+  font-size: 22rpx;
+  color: #f56c6c;
+}
+
+.priceValue {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #f56c6c;
+}
+
+.quantityControl {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+}
+
+.quantityBtn {
+  width: 48rpx;
+  height: 48rpx;
+  background: #f5f7fa;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28rpx;
+  color: #667eea;
+}
+
+.quantityValue {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #333;
+  min-width: 40rpx;
+  text-align: center;
+}
+
+.deleteBtn {
+  padding: 16rpx;
+  flex-shrink: 0;
+}
+
+.deleteIcon {
+  font-size: 36rpx;
+}
+
+.clearRow {
+  padding: 32rpx;
+  text-align: center;
+}
+
+.clearText {
+  font-size: 26rpx;
+  color: #999;
+}
+
+.footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 100rpx;
+  background: #fff;
+  box-shadow: 0 -4rpx 20rpx rgba(0, 0, 0, 0.08);
+  display: flex;
+  align-items: center;
+  padding: 0 24rpx;
+  gap: 20rpx;
+  z-index: 100;
+}
+
+.selectAll {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.selectAllText {
+  font-size: 26rpx;
+  color: #333;
+}
+
+.totalInfo {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+}
+
+.totalLabel {
+  font-size: 26rpx;
+  color: #333;
+}
+
+.totalSymbol {
+  font-size: 24rpx;
+  color: #f56c6c;
+}
+
+.totalValue {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #f56c6c;
+}
+
+.checkoutBtn {
+  padding: 20rpx 48rpx;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 60rpx;
+}
+
+.checkoutText {
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.dialogFooter {
+  display: flex;
+  gap: 20rpx;
+  padding: 20rpx;
+}
+
+.dialogBtn {
+  flex: 1;
+}
+
+.tableDialog {
+  padding: 20rpx 0;
+}
+
+.inputRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 20rpx;
+  margin-bottom: 24rpx;
+}
+
+.inputLabel {
+  width: 100rpx;
+  font-size: 28rpx;
+  color: #333;
+  padding-top: 16rpx;
+}
+
+.inputField {
+  flex: 1;
+  height: 72rpx;
+  padding: 0 20rpx;
+  border: 1rpx solid #e0e0e0;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+}
+
+.textareaField {
+  flex: 1;
+  min-height: 120rpx;
+  padding: 16rpx 20rpx;
+  border: 1rpx solid #e0e0e0;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+}

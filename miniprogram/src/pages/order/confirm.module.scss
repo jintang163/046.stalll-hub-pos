@@ -1,0 +1,218 @@
+.container {
+  min-height: 100vh;
+  background: #f5f7fa;
+  padding-bottom: 120rpx;
+}
+
+.scrollContent {
+  height: calc(100vh - 120rpx);
+}
+
+.section {
+  background: #fff;
+  margin-bottom: 20rpx;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 24rpx 32rpx 16rpx;
+}
+
+.sectionIcon {
+  font-size: 32rpx;
+}
+
+.sectionTitle {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.orderItem {
+  display: flex;
+  gap: 20rpx;
+  padding: 20rpx 32rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.itemImage {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 12rpx;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.itemInfo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.itemName {
+  font-size: 28rpx;
+  font-weight: 500;
+  color: #333;
+  display: block;
+}
+
+.itemSpec {
+  font-size: 22rpx;
+  color: #999;
+  display: block;
+}
+
+.itemBottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.itemPrice {
+  display: flex;
+  align-items: baseline;
+}
+
+.priceSymbol {
+  font-size: 22rpx;
+  color: #f56c6c;
+}
+
+.priceValue {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #f56c6c;
+}
+
+.itemQuantity {
+  font-size: 24rpx;
+  color: #999;
+}
+
+.footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 100rpx;
+  background: #fff;
+  box-shadow: 0 -4rpx 20rpx rgba(0, 0, 0, 0.08);
+  display: flex;
+  align-items: center;
+  padding: 0 24rpx;
+  gap: 20rpx;
+  z-index: 100;
+}
+
+.footerTotal {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+}
+
+.totalLabel {
+  font-size: 26rpx;
+  color: #333;
+}
+
+.totalSymbol {
+  font-size: 24rpx;
+  color: #f56c6c;
+}
+
+.totalValue {
+  font-size: 40rpx;
+  font-weight: 700;
+  color: #f56c6c;
+}
+
+.submitBtn {
+  padding: 20rpx 60rpx;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 60rpx;
+}
+
+.btnDisabled {
+  opacity: 0.7;
+}
+
+.submitText {
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.couponList {
+  max-height: 500rpx;
+  padding: 20rpx;
+}
+
+.emptyCoupon {
+  padding: 60rpx;
+  text-align: center;
+}
+
+.emptyText {
+  font-size: 28rpx;
+  color: #999;
+}
+
+.couponItem {
+  display: flex;
+  gap: 24rpx;
+  padding: 24rpx;
+  background: linear-gradient(135deg, #fff5f5 0%, #fff 100%);
+  border-radius: 16rpx;
+  margin-bottom: 16rpx;
+  border: 2rpx solid transparent;
+}
+
+.couponSelected {
+  border-color: #667eea;
+  background: linear-gradient(135deg, #f0f4ff 0%, #fff 100%);
+}
+
+.couponLeft {
+  width: 140rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  border-right: 2rpx dashed #f0f0f0;
+  padding-right: 24rpx;
+}
+
+.couponValue {
+  font-size: 40rpx;
+  font-weight: 700;
+  color: #f56c6c;
+}
+
+.couponCondition {
+  font-size: 22rpx;
+  color: #999;
+}
+
+.couponInfo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8rpx;
+}
+
+.couponName {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.couponTime {
+  font-size: 22rpx;
+  color: #999;
+}
