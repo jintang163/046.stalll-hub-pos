@@ -22,6 +22,13 @@ const config = {
     corsOrigin: process.env.SOCKET_IO_CORS_ORIGIN || '*',
   },
 
+  backend: {
+    baseUrl: process.env.BACKEND_API_BASE_URL || 'http://127.0.0.1:8080/api/v1',
+    timeout: parseInt(process.env.BACKEND_API_TIMEOUT) || 10000,
+    internalToken: process.env.BACKEND_API_INTERNAL_TOKEN || '',
+    printerSyncInterval: parseInt(process.env.PRINTER_CONFIG_SYNC_INTERVAL) || 60000,
+  },
+
   print: {
     retryInterval: parseInt(process.env.PRINT_RETRY_INTERVAL) || 30000,
     maxRetries: parseInt(process.env.PRINT_MAX_RETRIES) || 5,

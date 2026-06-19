@@ -72,6 +72,25 @@ func (h *OrderHandler) GetByOrderNo(c *gin.Context) {
 	middleware.Success(c, order)
 }
 
+func (h *OrderHandler) GetForPrint(c *gin.Context) {
+	orderNo := c.Param("orderNo")
+	if orderNo == "" {
+		middleware.Error(c, http.StatusBadRequest, "Order number is required")
+		return
+	}
+
+	order, err := h.orderService.GetByOrderNo(orderNo)
+	if err != nil {
+		middleware.Error(c, http.StatusNotFound, "Order not found")
+		return
+	}
+
+	printData := map[string]interface{}{
+		"order": order,
+	}
+	middleware.Success(c, printData)
+}
+
 func (h *OrderHandler) List(c *gin.Context) {
 	var query dto.OrderQuery
 	if err := c.ShouldBindQuery(&query); err != nil {

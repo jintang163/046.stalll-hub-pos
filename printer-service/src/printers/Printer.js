@@ -1,7 +1,9 @@
 'use strict';
 
 const logger = require('../utils/logger');
+const { templateManager } = require('../templates');
 const { PRINTER_CONNECTION_TYPES } = require('../constants');
+const iconv = require('iconv-lite');
 
 class BasePrinter {
   constructor(config) {
@@ -10,8 +12,8 @@ class BasePrinter {
     this.storeId = config.storeId;
     this.type = config.type;
     this.connectionType = config.connectionType;
-    this.printType = config.printType;
-    this.status = config.status || 1;
+    this.printType = config.printType || 'kitchen';
+    this.status = config.status !== undefined ? config.status : 1;
     this.copies = config.copies || 1;
     this.width = config.width || 80;
     this.encoding = config.encoding || 'UTF-8';
@@ -35,147 +37,96 @@ class BasePrinter {
   }
 
   async testPrint() {
-    const testData = this.generateTestData();
+    const testData = {
+      type: 'kitchen',
+      data: this.getTestOrderData(),
+    };
     return await this.print(testData);
   }
 
-  generateTestData() {
+  getTestOrderData() {
     return {
-      type: 'test',
-      title: '测试打印',
-      content: `打印机: ${this.name}\n类型: ${this.connectionType}\n时间: ${new Date().toLocaleString()}\n打印成功！`,
+      storeName: this.name || '打印机测试',
+      orderNo: `TEST${Date.now()}`,
+      tableNo: 'T00',
+      orderType: 'dine_in',
+      totalAmount: '88.00',
+      payAmount: '88.00',
+      payMethod: 'cash',
+      payStatus: 1,
+      createdAt: new Date().toLocaleString(),
+      items: [
+        { productName: '测试菜品1(大份)', skuName: '大份', categoryName: '热菜', quantity: 1, price: '38.00', subtotal: '38.00' },
+        { productName: '测试菜品2', skuName: '', categoryName: '凉菜', quantity: 2, price: '15.00', subtotal: '30.00' },
+        { productName: '可乐', skuName: '中杯', categoryName: '饮品', quantity: 2, price: '10.00', subtotal: '20.00' },
+      ],
     };
   }
-}
 
-class NetworkPrinter extends BasePrinter {
-  constructor(config) {
-    super(config);
-    this.ipAddress = config.ipAddress || '127.0.0.1';
-    this.port = config.port || 9100;
-    this.device = null;
+  buildEscPosBytes(printData) {
+    const EscPosPrinter = require('./escpos').EscPosPrinter;
+    const printer = new EscPosPrinter();
+    printer.setEncoding(this.encoding);
+
+    const type = printData.type || this.printType || 'kitchen';
+    const data = printData.data || {};
+    const template = printData.template || templateManager.getTemplate(type);
+
+    const renderedLines = templateManager.formatTemplate(template, data);
+
+    for (const element of renderedLines) {
+      this.applyTemplateElement(printer, element);
+    }
+
+    return printer.Bytes();
   }
 
-  async connect() {
-    try {
-      const Network = require('escpos-network');
-      this.device = new Network(this.ipAddress, this.port);
-      await new Promise((resolve, reject) => {
-        this.device.open((err) => {
-          if (err) reject(err);
-          else resolve();
-        });
-      });
-      logger.info('[NetworkPrinter] 打印机连接成功 %s:%s', this.ipAddress, this.port);
-      return true;
-    } catch (err) {
-      logger.error('[NetworkPrinter] 打印机连接失败 %s:%s, error=%s', this.ipAddress, this.port, err.message);
-      this.device = null;
-      return false;
+  applyTemplateElement(printer, element) {
+    switch (element.type) {
+      case 'text':
+        if (element.align) {
+          printer.align(element.align);
+        }
+        if (element.bold) {
+          printer.setTextBold(true);
+        }
+        if (element.doubleWidth) {
+          printer.setDoubleWidth(true);
+        }
+        printer.text(element.content || '');
+        if (element.bold) {
+          printer.setTextBold(false);
+        }
+        if (element.doubleWidth) {
+          printer.setDoubleWidth(false);
+        }
+        if (element.align) {
+          printer.align('left');
+        }
+        break;
+
+      case 'separator':
+        printer.text(element.content || this.getSeparatorLine());
+        break;
+
+      case 'feed':
+        printer.feed(element.lines || 1);
+        break;
+
+      case 'cut':
+        printer.cut(element.mode || 'full');
+        break;
+
+      default:
+        if (element.content) {
+          printer.text(element.content);
+        }
     }
   }
 
-  async disconnect() {
-    if (this.device) {
-      try {
-        await new Promise((resolve) => {
-          this.device.close(() => resolve());
-        });
-      } catch (err) {
-        logger.warn('[NetworkPrinter] 断开连接出错: %s', err.message);
-      }
-      this.device = null;
-    }
-  }
-
-  async isConnected() {
-    return this.device !== null;
-  }
-
-  async print(printData) {
-    const escpos = require('escpos');
-    const iconv = require('iconv-lite');
-
-    if (!this.device) {
-      const connected = await this.connect();
-      if (!connected) {
-        throw new Error(`无法连接到打印机 ${this.ipAddress}:${this.port}`);
-      }
-    }
-
-    const printer = new escpos.Printer(this.device);
-
-    if (this.encoding === 'GBK' || this.encoding === 'GB2312') {
-      printer.encoding = this.encoding;
-    }
-
-    return await new Promise((resolve, reject) => {
-      try {
-        this.renderPrintContent(printer, escpos, iconv, printData);
-        printer.feed(3).cut().close();
-        resolve({ success: true });
-      } catch (err) {
-        reject(err);
-      }
-    });
-  }
-
-  renderPrintContent(printer, escpos, iconv, printData) {
-    const { type, data } = printData;
-
-    printer.align('ct').style('bu').size(1, 1);
-    printer.text(iconv.encode(data.storeName || '门店', this.encoding));
-    printer.text(iconv.encode(`单号: ${data.orderNo || ''}`, this.encoding));
-    printer.feed(1);
-
-    printer.align('lt').style('normal');
-    printer.text(iconv.encode('===============', this.encoding));
-
-    if (type === 'kitchen' || type === 'order') {
-      printer.text(iconv.encode('后厨单', this.encoding));
-      if (data.tableNo) {
-        printer.text(iconv.encode(`桌号: ${data.tableNo}`, this.encoding));
-      }
-      printer.text(iconv.encode(`类型: ${this.getOrderTypeName(data.orderType)}`, this.encoding));
-      printer.text(iconv.encode('===============', this.encoding));
-      printer.text(iconv.encode('菜品              数量', this.encoding));
-      printer.text(iconv.encode('---------------', this.encoding));
-
-      for (const item of data.items || []) {
-        const name = item.skuName && item.skuName !== item.productName
-          ? `${item.productName}(${item.skuName})`
-          : item.productName;
-        const truncatedName = this.truncate(name, 16);
-        const line = `${truncatedName.padEnd(16)} ${String(item.quantity).padStart(4)}`;
-        printer.text(iconv.encode(line, this.encoding));
-      }
-    } else if (type === 'receipt') {
-      printer.text(iconv.encode('结账单', this.encoding));
-      if (data.tableNo) {
-        printer.text(iconv.encode(`桌号: ${data.tableNo}`, this.encoding));
-      }
-      printer.text(iconv.encode(`类型: ${this.getOrderTypeName(data.orderType)}`, this.encoding));
-      printer.text(iconv.encode('===============', this.encoding));
-      printer.text(iconv.encode('菜品        数量  单价  金额', this.encoding));
-      printer.text(iconv.encode('---------------------------', this.encoding));
-
-      for (const item of data.items || []) {
-        const name = this.truncate(item.productName, 10);
-        const line = `${name.padEnd(10)} ${String(item.quantity).padStart(2)} ${String(item.price).padStart(5)} ${String(item.subtotal).padStart(6)}`;
-        printer.text(iconv.encode(line, this.encoding));
-      }
-
-      printer.text(iconv.encode('---------------------------', this.encoding));
-      printer.text(iconv.encode(`合计: ${data.totalAmount || '0.00'}`, this.encoding));
-      printer.text(iconv.encode(`应收: ${data.payAmount || '0.00'}`, this.encoding));
-      if (data.payStatus === 1) {
-        printer.text(iconv.encode(`支付: ${this.getPayMethodName(data.payMethod)}`, this.encoding));
-      }
-    }
-
-    printer.feed(1);
-    printer.align('ct');
-    printer.text(iconv.encode(type === 'kitchen' ? '请及时备菜' : '欢迎下次光临', this.encoding));
+  getSeparatorLine() {
+    const charsPerLine = this.width >= 80 ? 32 : 24;
+    return '-'.repeat(charsPerLine);
   }
 
   getOrderTypeName(orderType) {
@@ -196,11 +147,111 @@ class NetworkPrinter extends BasePrinter {
     };
     return map[payMethod] || payMethod;
   }
+}
 
-  truncate(str, maxLen) {
-    if (!str) return '';
-    if (str.length <= maxLen) return str;
-    return str.slice(0, maxLen - 3) + '...';
+class NetworkPrinter extends BasePrinter {
+  constructor(config) {
+    super(config);
+    this.ipAddress = config.ipAddress || '127.0.0.1';
+    this.port = config.port || 9100;
+    this.device = null;
+  }
+
+  async connect() {
+    return new Promise((resolve) => {
+      try {
+        const net = require('net');
+        this.device = new net.Socket();
+
+        const timeoutMs = 5000;
+        const timer = setTimeout(() => {
+          if (this.device) {
+            this.device.destroy();
+            this.device = null;
+          }
+          logger.error('[NetworkPrinter] 连接超时 %s:%s', this.ipAddress, this.port);
+          resolve(false);
+        }, timeoutMs);
+
+        this.device.connect(this.port, this.ipAddress, () => {
+          clearTimeout(timer);
+          logger.info('[NetworkPrinter] 打印机连接成功 %s:%s', this.ipAddress, this.port);
+          resolve(true);
+        });
+
+        this.device.on('error', (err) => {
+          clearTimeout(timer);
+          logger.error('[NetworkPrinter] 打印机连接错误 %s:%s, error=%s', this.ipAddress, this.port, err.message);
+          this.device = null;
+          resolve(false);
+        });
+      } catch (err) {
+        logger.error('[NetworkPrinter] 创建Socket异常: %s', err.message);
+        resolve(false);
+      }
+    });
+  }
+
+  async disconnect() {
+    if (this.device) {
+      try {
+        this.device.end();
+        this.device.destroy();
+      } catch (err) {
+        logger.warn('[NetworkPrinter] 断开连接出错: %s', err.message);
+      }
+      this.device = null;
+    }
+  }
+
+  async isConnected() {
+    return this.device && !this.device.destroyed && this.device.writable;
+  }
+
+  async print(printData) {
+    if (!this.device || this.device.destroyed || !this.device.writable) {
+      const connected = await this.connect();
+      if (!connected) {
+        throw new Error(`无法连接到打印机 ${this.ipAddress}:${this.port}`);
+      }
+    }
+
+    return new Promise((resolve, reject) => {
+      try {
+        const escposBytes = this.buildEscPosBytes(printData);
+
+        let settled = false;
+        const finish = (err, result) => {
+          if (settled) return;
+          settled = true;
+          if (err) reject(err);
+          else resolve(result);
+        };
+
+        const timeout = setTimeout(() => {
+          finish(new Error('打印数据写入超时'));
+        }, 15000);
+
+        const drained = this.device.write(escposBytes, (err) => {
+          clearTimeout(timeout);
+          if (err) {
+            logger.error('[NetworkPrinter] 写入数据失败: %s', err.message);
+            finish(err);
+          } else {
+            logger.info('[NetworkPrinter] 数据已发送到打印机 %s:%s (%d bytes)', this.ipAddress, this.port, escposBytes.length);
+            finish(null, { success: true, bytes: escposBytes.length });
+          }
+        });
+
+        if (!drained) {
+          this.device.once('drain', () => {
+            logger.debug('[NetworkPrinter] 缓冲区已排空');
+          });
+        }
+      } catch (err) {
+        reject(err);
+      }
+    });
   }
 }
 
@@ -210,14 +261,36 @@ class USBPrinter extends BasePrinter {
     this.vendorId = config.vendorId;
     this.productId = config.productId;
     this.device = null;
+    this._adapter = null;
+  }
+
+  _ensureAdapter() {
+    if (!this._adapter) {
+      try {
+        const escposUSB = require('escpos-usb');
+        const escpos = require('escpos');
+        this._adapter = { USB: escposUSB, Printer: escpos.Printer };
+      } catch (err) {
+        logger.warn('[USBPrinter] escpos-usb 未安装，回退到模拟模式: %s', err.message);
+        this._adapter = null;
+      }
+    }
+    return this._adapter;
   }
 
   async connect() {
+    const adapter = this._ensureAdapter();
+    if (!adapter) {
+      this.device = { connected: true, mode: 'mock' };
+      logger.warn('[USBPrinter] 模拟模式连接成功 (escpos-usb不可用)');
+      return true;
+    }
+
     try {
-      const USB = require('escpos-usb');
       this.device = this.vendorId && this.productId
-        ? new USB(this.vendorId, this.productId)
-        : new USB();
+        ? new adapter.USB(this.vendorId, this.productId)
+        : new adapter.USB();
+
       await new Promise((resolve, reject) => {
         this.device.open((err) => {
           if (err) reject(err);
@@ -234,7 +307,7 @@ class USBPrinter extends BasePrinter {
   }
 
   async disconnect() {
-    if (this.device) {
+    if (this.device && !this.device.mode) {
       try {
         await new Promise((resolve) => {
           this.device.close(() => resolve());
@@ -244,6 +317,7 @@ class USBPrinter extends BasePrinter {
       }
       this.device = null;
     }
+    this.device = null;
   }
 
   async isConnected() {
@@ -251,6 +325,8 @@ class USBPrinter extends BasePrinter {
   }
 
   async print(printData) {
+    const adapter = this._ensureAdapter();
+
     if (!this.device) {
       const connected = await this.connect();
       if (!connected) {
@@ -258,21 +334,38 @@ class USBPrinter extends BasePrinter {
       }
     }
 
-    const escpos = require('escpos');
-    const iconv = require('iconv-lite');
-    const printer = new escpos.Printer(this.device);
+    if (this.device.mode === 'mock' || !adapter) {
+      const escposBytes = this.buildEscPosBytes(printData);
+      logger.info('[USBPrinter] [模拟模式] 已生成ESC/POS数据 (%d bytes) - 实际需要escpos-usb', escposBytes.length);
+      this._debugOutputEscPos(escposBytes);
+      return { success: true, bytes: escposBytes.length, mode: 'mock' };
+    }
 
-    return await new Promise((resolve, reject) => {
+    const printer = new adapter.Printer(this.device, { encoding: this.encoding });
+    const escposBytes = this.buildEscPosBytes(printData);
+
+    return new Promise((resolve, reject) => {
       try {
-        const networkPrinter = new NetworkPrinter(this.config);
-        networkPrinter.device = this.device;
-        networkPrinter.renderPrintContent(printer, escpos, iconv, printData);
+        printer.raster.write(escposBytes);
         printer.feed(3).cut().close();
-        resolve({ success: true });
+        resolve({ success: true, bytes: escposBytes.length });
       } catch (err) {
         reject(err);
       }
     });
+  }
+
+  _debugOutputEscPos(bytes) {
+    try {
+      const text = bytes.toString('utf-8').replace(/[\x00-\x1F\x7F-\x9F]/g, (c) => {
+        if (c === '\n') return '\n';
+        if (c === '\r') return '';
+        return '';
+      });
+      if (text.trim()) {
+        logger.debug('[USBPrinter] 模拟输出内容:\n' + '-'.repeat(32) + '\n' + text + '-'.repeat(32));
+      }
+    } catch (_) {}
   }
 }
 
@@ -288,6 +381,7 @@ class BluetoothPrinter extends BasePrinter {
     try {
       const Bluetooth = require('escpos-bluetooth');
       this.device = new Bluetooth(this.address, this.channel);
+
       await new Promise((resolve, reject) => {
         this.device.open((err) => {
           if (err) reject(err);
@@ -329,16 +423,14 @@ class BluetoothPrinter extends BasePrinter {
     }
 
     const escpos = require('escpos');
-    const iconv = require('iconv-lite');
-    const printer = new escpos.Printer(this.device);
+    const printer = new escpos.Printer(this.device, { encoding: this.encoding });
+    const escposBytes = this.buildEscPosBytes(printData);
 
-    return await new Promise((resolve, reject) => {
+    return new Promise((resolve, reject) => {
       try {
-        const networkPrinter = new NetworkPrinter(this.config);
-        networkPrinter.device = this.device;
-        networkPrinter.renderPrintContent(printer, escpos, iconv, printData);
+        printer.raster.write(escposBytes);
         printer.feed(3).cut().close();
-        resolve({ success: true });
+        resolve({ success: true, bytes: escposBytes.length });
       } catch (err) {
         reject(err);
       }
@@ -356,6 +448,9 @@ class PrinterFactory {
       case PRINTER_CONNECTION_TYPES.BLUETOOTH:
         return new BluetoothPrinter(config);
       default:
+        if (config.ipAddress) {
+          return new NetworkPrinter(config);
+        }
         return new NetworkPrinter(config);
     }
   }

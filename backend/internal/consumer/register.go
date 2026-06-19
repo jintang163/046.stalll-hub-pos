@@ -1,13 +1,13 @@
 package consumer
 
 import (
+	"log"
 	"stalll-hub-pos/backend/pkg/nsq"
 )
 
 func InitAllConsumers() error {
 	orderConsumer := NewOrderCreateConsumer()
 	paymentConsumer := NewPaymentSuccessConsumer()
-	printConsumer := NewPrintConsumer()
 	productConsumer := NewProductChangeConsumer()
 
 	configs := []nsq.ConsumerRegistration{
@@ -22,16 +22,14 @@ func InitAllConsumers() error {
 			Handler: paymentConsumer.HandleMessage,
 		},
 		{
-			Topic:   nsq.TopicPrintOrder,
-			Channel: "print_order_channel",
-			Handler: printConsumer.HandleMessage,
-		},
-		{
 			Topic:   nsq.TopicProductChanged,
 			Channel: "product_change_channel",
 			Handler: productConsumer.HandleMessage,
 		},
 	}
 
+	log.Println("[PrintConsumer] 打印任务已迁移到 Node.js printer-service，Go端不再消费 print_order 主题")
+
 	return nsq.InitConsumers(configs)
 }
+

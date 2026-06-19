@@ -99,6 +99,8 @@ type OrderItemDetail struct {
 	ID              uint            `json:"id"`
 	ProductID       uint            `json:"product_id"`
 	SKUID           uint            `json:"sku_id"`
+	CategoryID      uint            `json:"category_id"`
+	CategoryName    string          `json:"category_name"`
 	ProductName     string          `json:"product_name"`
 	SKUName         string          `json:"sku_name"`
 	AttributeValues string          `json:"attribute_values"`

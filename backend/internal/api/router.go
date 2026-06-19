@@ -60,6 +60,7 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 			orders.GET("", middleware.JWTAuth(), orderHandler.List)
 			orders.GET("/:id", orderHandler.GetByID)
 			orders.GET("/no/:orderNo", orderHandler.GetByOrderNo)
+			orders.GET("/no/:orderNo/print", orderHandler.GetForPrint)
 			orders.PUT("/:id/status", middleware.JWTAuth(), orderHandler.UpdateStatus)
 			orders.POST("/:id/cancel", orderHandler.Cancel)
 			orders.POST("/:id/refund", orderHandler.Refund)
@@ -102,6 +103,12 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 			printers.PUT("/:id", storeHandler.UpdatePrinter)
 			printers.DELETE("/:id", storeHandler.DeletePrinter)
 			printers.POST("/test", storeHandler.PrintTest)
+		}
+
+		internalPrinters := api.Group("/internal/printers")
+		{
+			internalPrinters.GET("", storeHandler.ListPrinters)
+			internalPrinters.GET("/:id", storeHandler.GetPrinter)
 		}
 
 		members := api.Group("/members")

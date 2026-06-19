@@ -32,7 +32,7 @@ func (r *OrderRepository) CreateWithItems(order *model.Order) error {
 
 func (r *OrderRepository) GetByID(id uint) (*model.Order, error) {
 	var order model.Order
-	err := r.db.Preload("Items").Preload("Items").Preload("Refunds").
+	err := r.db.Preload("Items").Preload("Refunds").
 		Preload("Store").Preload("Member").
 		First(&order, id).Error
 	if err != nil {
@@ -50,6 +50,32 @@ func (r *OrderRepository) GetByOrderNo(orderNo string) (*model.Order, error) {
 		return nil, err
 	}
 	return &order, nil
+}
+
+type ProductCategoryInfo struct {
+	ProductID    uint   `gorm:"column:product_id"`
+	CategoryID   uint   `gorm:"column:category_id"`
+	CategoryName string `gorm:"column:category_name"`
+}
+
+func (r *OrderRepository) GetProductCategoryMap(productIDs []uint) (map[uint]ProductCategoryInfo, error) {
+	if len(productIDs) == 0 {
+		return make(map[uint]ProductCategoryInfo), nil
+	}
+	var infos []ProductCategoryInfo
+	err := r.db.Table("products p").
+		Select("p.id as product_id, p.category_id as category_id, c.name as category_name").
+		Joins("LEFT JOIN categories c ON p.category_id = c.id").
+		Where("p.id IN ?", productIDs).
+		Scan(&infos).Error
+	if err != nil {
+		return nil, err
+	}
+	categoryMap := make(map[uint]ProductCategoryInfo, len(infos))
+	for _, info := range infos {
+		categoryMap[info.ProductID] = info
+	}
+	return categoryMap, nil
 }
 
 func (r *OrderRepository) List(query *dto.OrderQuery) ([]model.Order, int64, error) {

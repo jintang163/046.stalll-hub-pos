@@ -154,6 +154,9 @@ async function shutdown(signal) {
   logger.info('[Shutdown] 收到 %s 信号，正在优雅关闭...', signal);
 
   try {
+    printerConfigManager.stopPeriodicSync && printerConfigManager.stopPeriodicSync();
+    logger.info('[Shutdown] 打印机配置同步定时器已停止');
+
     nsqConsumer.close();
     logger.info('[Shutdown] NSQ消费者已关闭');
 

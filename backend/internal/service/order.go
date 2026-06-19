@@ -504,12 +504,30 @@ func (s *OrderService) convertToListResponse(order *model.Order) dto.OrderListRe
 }
 
 func (s *OrderService) convertToDetailResponse(order *model.Order) *dto.OrderDetailResponse {
+	productIDs := make([]uint, 0, len(order.Items))
+	productIDSet := make(map[uint]bool)
+	for _, item := range order.Items {
+		if !productIDSet[item.ProductID] {
+			productIDs = append(productIDs, item.ProductID)
+			productIDSet[item.ProductID] = true
+		}
+	}
+	categoryMap, _ := s.orderRepo.GetProductCategoryMap(productIDs)
+
 	items := make([]dto.OrderItemDetail, len(order.Items))
 	for i, item := range order.Items {
+		categoryID := uint(0)
+		categoryName := ""
+		if info, ok := categoryMap[item.ProductID]; ok {
+			categoryID = info.CategoryID
+			categoryName = info.CategoryName
+		}
 		items[i] = dto.OrderItemDetail{
 			ID:              item.ID,
 			ProductID:       item.ProductID,
 			SKUID:           item.SKUID,
+			CategoryID:      categoryID,
+			CategoryName:    categoryName,
 			ProductName:     item.ProductName,
 			SKUName:         item.SKUName,
 			AttributeValues: item.AttributeValues,
