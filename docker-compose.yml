@@ -180,6 +180,39 @@ services:
       - stalll-pos-network
     restart: unless-stopped
 
+  printer-service:
+    build:
+      context: ./printer-service
+      dockerfile: Dockerfile
+    container_name: stalll-pos-printer-service
+    environment:
+      - PORT=3001
+      - NSQ_NSQD_ADDRESS=nsqd:4150
+      - NSQ_LOOKUPD_ADDRESS=nsqlookupd:4161
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis123}
+      - REDIS_DB=0
+      - SOCKET_IO_PORT=3002
+      - SOCKET_IO_CORS_ORIGIN=*
+      - PRINT_RETRY_INTERVAL=30000
+      - PRINT_MAX_RETRIES=5
+      - LOG_LEVEL=info
+    ports:
+      - "${PRINTER_SERVICE_PORT:-3001}:3001"
+      - "${PRINTER_SOCKET_PORT:-3002}:3002"
+    depends_on:
+      redis:
+        condition: service_healthy
+      nsqd:
+        condition: service_healthy
+    volumes:
+      - printer-data:/app/data
+      - printer-logs:/app/logs
+    networks:
+      - stalll-pos-network
+    restart: unless-stopped
+
 volumes:
   mysql-data:
     driver: local
@@ -188,6 +221,10 @@ volumes:
   nsq-data:
     driver: local
   minio-data:
+    driver: local
+  printer-data:
+    driver: local
+  printer-logs:
     driver: local
 
 networks:
