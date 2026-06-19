@@ -27,6 +27,7 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 	reportHandler := handler.NewReportHandler()
 	paymentHandler := handler.NewPaymentHandler()
 	tableHandler := handler.NewTableHandler()
+	recommendHandler := handler.NewRecommendHandler()
 
 	orderHandler := handler.NewOrderHandler(nil)
 
@@ -240,6 +241,15 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 		storesMap := api.Group("/store-map")
 		{
 			storesMap.GET("", tableHandler.GetStoreMap)
+		}
+
+		recommendations := api.Group("/recommendations")
+		{
+			recommendations.GET("/cart", recommendHandler.GetCartRecommendations)
+			recommendations.GET("/config", middleware.JWTAuth(), recommendHandler.GetConfig)
+			recommendations.PUT("/config", middleware.JWTAuth(), recommendHandler.UpdateConfig)
+			recommendations.POST("/refresh", middleware.JWTAuth(), recommendHandler.TriggerRefresh)
+			recommendations.GET("/refresh/status", middleware.JWTAuth(), recommendHandler.GetRefreshStatus)
 		}
 	}
 

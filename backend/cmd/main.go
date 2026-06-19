@@ -7,6 +7,7 @@ import (
 	"stalll-hub-pos/backend/internal/api"
 	"stalll-hub-pos/backend/internal/consumer"
 	"stalll-hub-pos/backend/internal/model"
+	"stalll-hub-pos/backend/internal/service"
 	"stalll-hub-pos/backend/pkg/database"
 	"stalll-hub-pos/backend/pkg/minio"
 	"stalll-hub-pos/backend/pkg/nsq"
@@ -52,11 +53,15 @@ func main() {
 		&model.HourlyReport{},
 		&model.PaymentReport{},
 		&model.ReportTask{},
+		&model.RecommendConfig{},
+		&model.RecommendResult{},
 	)
 
 	initDefaultData()
 
 	initNSQConsumers()
+
+	initRecommendScheduler()
 
 	r := api.SetupRouter(database.DB, nsq.Producer)
 
@@ -108,4 +113,10 @@ func initNSQConsumers() {
 		log.Fatalf("Failed to initialize NSQ consumers: %v", err)
 	}
 	log.Println("All NSQ consumers initialized successfully")
+}
+
+func initRecommendScheduler() {
+	recService := service.NewRecommendService()
+	recService.StartAutoRefreshScheduler()
+	log.Println("Recommendation auto-refresh scheduler started")
 }
