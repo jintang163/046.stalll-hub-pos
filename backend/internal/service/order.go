@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math/big"
 	"strings"
 	"time"
@@ -19,18 +20,24 @@ import (
 )
 
 type OrderService struct {
-	orderRepo   *repository.OrderRepository
-	productRepo *repository.ProductRepository
-	nsqProducer *nsq.Producer
-	cfg         *config.Config
+	orderRepo        *repository.OrderRepository
+	productRepo      *repository.ProductRepository
+	memberRepo       *repository.MemberRepository
+	memberLevelRepo  *repository.MemberLevelRepository
+	pointsEngine     *PointsEngineService
+	nsqProducer      *nsq.Producer
+	cfg              *config.Config
 }
 
 func NewOrderService() *OrderService {
 	return &OrderService{
-		orderRepo:   repository.NewOrderRepository(),
-		productRepo: repository.NewProductRepository(),
-		nsqProducer: nsq.Producer,
-		cfg:         config.AppConfig,
+		orderRepo:        repository.NewOrderRepository(),
+		productRepo:      repository.NewProductRepository(),
+		memberRepo:       repository.NewMemberRepository(nil),
+		memberLevelRepo:  repository.NewMemberLevelRepository(nil),
+		pointsEngine:     NewPointsEngineService(),
+		nsqProducer:      nsq.Producer,
+		cfg:              config.AppConfig,
 	}
 }
 
@@ -98,11 +105,30 @@ func (s *OrderService) Create(req *dto.CreateOrderRequest) (*dto.CreateOrderResp
 
 	discountAmount := decimal.Zero
 	couponAmount := decimal.Zero
+	levelDiscountAmount := decimal.Zero
 	pointsUsed := req.PointsUsed
 	var pointsEarned int
+	levelPointsRate := decimal.NewFromInt(1)
+
+	if req.MemberID > 0 {
+		member, err := s.memberRepo.GetByID(req.MemberID)
+		if err == nil && member.Level.ID > 0 && member.Level.DiscountRate.GreaterThan(decimal.Zero) {
+			levelPointsRate = member.Level.DiscountRate.Div(decimal.NewFromInt(100))
+			if member.Level.DiscountRate.LessThan(decimal.NewFromInt(100)) {
+				levelDiscountAmount = totalAmount.Mul(
+					decimal.NewFromInt(100).Sub(member.Level.DiscountRate).Div(decimal.NewFromInt(100)),
+				)
+				discountAmount = discountAmount.Add(levelDiscountAmount)
+			}
+		}
+	}
 
 	if pointsUsed > 0 {
-		discountAmount = discountAmount.Add(decimal.NewFromInt(int64(pointsUsed)).Div(decimal.NewFromInt(100)))
+		pointsDiscount, usablePoints, err := s.pointsEngine.CalculateRedemptionDiscount(req.StoreID, pointsUsed)
+		if err == nil && usablePoints > 0 {
+			pointsUsed = usablePoints
+			discountAmount = discountAmount.Add(pointsDiscount)
+		}
 	}
 
 	payAmount := totalAmount.Sub(discountAmount).Sub(couponAmount)
@@ -110,8 +136,8 @@ func (s *OrderService) Create(req *dto.CreateOrderRequest) (*dto.CreateOrderResp
 		payAmount = decimal.Zero
 	}
 
-	if payAmount.GreaterThan(decimal.Zero) {
-		pointsEarned = int(payAmount.IntPart())
+	if payAmount.GreaterThan(decimal.Zero) && req.MemberID > 0 {
+		pointsEarned = s.pointsEngine.CalculateEarnedPoints(req.StoreID, payAmount, levelPointsRate)
 	}
 
 	order := &model.Order{
@@ -377,6 +403,36 @@ func (s *OrderService) NotifyPayment(orderNo string, payMethod string, transacti
 	err = s.orderRepo.UpdateStatus(order.ID, 2)
 	if err != nil {
 		return err
+	}
+
+	if order.MemberID > 0 {
+		member, err := s.memberRepo.GetByID(order.MemberID)
+		if err == nil {
+			levelPointsRate := decimal.NewFromInt(1)
+			if member.Level.ID > 0 && member.Level.DiscountRate.GreaterThan(decimal.Zero) {
+				levelPointsRate = member.Level.DiscountRate.Div(decimal.NewFromInt(100))
+			}
+
+			_, err = s.pointsEngine.ProcessOrderPoints(
+				member.ID,
+				order.StoreID,
+				order.ID,
+				order.PayAmount,
+				order.PointsUsed,
+				levelPointsRate,
+			)
+			if err != nil {
+				log.Printf("process order points failed: %v", err)
+			}
+
+			_ = s.memberRepo.IncrementConsume(member.ID, order.PayAmount, 1)
+
+			updatedMember, _ := s.memberRepo.GetByID(member.ID)
+			level, _ := s.memberLevelRepo.GetByPoints(updatedMember.TotalPoints)
+			if level != nil && level.ID != member.LevelID {
+				_ = s.memberRepo.Update(&model.Member{BaseModel: model.BaseModel{ID: member.ID}, LevelID: level.ID})
+			}
+		}
 	}
 
 	if s.nsqProducer != nil {

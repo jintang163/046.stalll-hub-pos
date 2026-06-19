@@ -37,6 +37,14 @@
 
       <el-table :data="list" v-loading="loading">
         <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column prop="rule_key" label="规则标识" width="120">
+          <template #default="{ row }">
+            <el-tag v-if="row.rule_key" size="small" :type="row.rule_key === 'birthday' ? 'danger' : 'info'">
+              {{ row.rule_key }}
+            </el-tag>
+            <span v-else style="color: #c0c4cc;">-</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="name" label="优惠券名称" min-width="180" />
         <el-table-column label="类型" width="100">
           <template #default="{ row }">
@@ -104,10 +112,24 @@
         label-width="120px">
         <el-row :gutter="20">
           <el-col :span="12">
+            <el-form-item label="规则标识">
+              <el-input v-model="couponForm.rule_key" placeholder="请输入规则标识，如 birthday">
+                <template #append>
+                  <el-button @click="couponForm.rule_key = 'birthday'" :type="couponForm.rule_key === 'birthday' ? 'primary' : ''">生日券</el-button>
+                </template>
+              </el-input>
+              <div style="margin-top: 4px; font-size: 12px; color: #909399;">
+                设置为 birthday 可作为生日自动发放优惠券
+              </div>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
             <el-form-item label="优惠券名称" prop="name">
               <el-input v-model="couponForm.name" placeholder="请输入优惠券名称" />
             </el-form-item>
           </el-col>
+        </el-row>
+        <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="优惠券类型" prop="type">
               <el-select v-model="couponForm.type" placeholder="请选择类型" style="width: 100%" @change="handleTypeChange">
@@ -268,6 +290,7 @@ const editId = ref(null)
 const couponFormRef = ref()
 
 const couponForm = reactive({
+  rule_key: '',
   name: '',
   type: 1,
   value: 0,
@@ -366,6 +389,7 @@ function openDialog(row = null) {
 
   if (row) {
     Object.assign(couponForm, {
+      rule_key: row.rule_key || '',
       name: row.name,
       type: row.type,
       value: row.value,
@@ -379,6 +403,7 @@ function openDialog(row = null) {
       status: row.status
     })
   } else {
+    couponForm.rule_key = ''
     couponForm.name = ''
     couponForm.type = 1
     couponForm.value = 0

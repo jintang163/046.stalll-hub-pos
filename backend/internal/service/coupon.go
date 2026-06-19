@@ -45,6 +45,7 @@ func (s *CouponService) CreateCoupon(storeID uint, req *dto.CouponCreateDTO) (*m
 
 	coupon := &model.Coupon{
 		StoreID:         storeID,
+		RuleKey:         req.RuleKey,
 		Name:            req.Name,
 		Type:            req.Type,
 		Value:           req.Value,
@@ -95,6 +96,9 @@ func (s *CouponService) UpdateCoupon(id uint, req *dto.CouponUpdateDTO) (*dto.Co
 		return nil, errors.New("coupon not found")
 	}
 
+	if req.RuleKey != "" {
+		coupon.RuleKey = req.RuleKey
+	}
 	if req.Name != "" {
 		coupon.Name = req.Name
 	}
@@ -421,6 +425,7 @@ func (s *CouponService) convertToCouponResponse(c *model.Coupon) *dto.CouponResp
 
 	return &dto.CouponResponse{
 		ID:              c.ID,
+		RuleKey:         c.RuleKey,
 		Name:            c.Name,
 		Type:            c.Type,
 		Value:           c.Value,

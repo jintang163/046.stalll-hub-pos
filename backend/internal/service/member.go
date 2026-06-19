@@ -11,23 +11,27 @@ import (
 
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/shopspring/decimal"
+	"gorm.io/gorm"
 	"stalll-hub-pos/backend/config"
 	"stalll-hub-pos/backend/internal/dto"
 	"stalll-hub-pos/backend/internal/model"
 	"stalll-hub-pos/backend/internal/repository"
+	"stalll-hub-pos/backend/pkg/database"
 )
 
 type MemberService struct {
-	memberRepo      *repository.MemberRepository
-	memberLevelRepo *repository.MemberLevelRepository
-	cfg             *config.Config
+	memberRepo         *repository.MemberRepository
+	memberLevelRepo    *repository.MemberLevelRepository
+	pointsEngine       *PointsEngineService
+	cfg                *config.Config
 }
 
 func NewMemberService(cfg *config.Config) *MemberService {
 	return &MemberService{
-		memberRepo:      repository.NewMemberRepository(nil),
-		memberLevelRepo: repository.NewMemberLevelRepository(nil),
-		cfg:             cfg,
+		memberRepo:         repository.NewMemberRepository(nil),
+		memberLevelRepo:    repository.NewMemberLevelRepository(nil),
+		pointsEngine:       NewPointsEngineService(),
+		cfg:                cfg,
 	}
 }
 
@@ -84,6 +88,23 @@ func (s *MemberService) Register(req *dto.MemberCreateDTO) (*dto.MemberResponse,
 	err := s.memberRepo.Create(member)
 	if err != nil {
 		return nil, fmt.Errorf("register failed: %w", err)
+	}
+
+	registerBonus := s.pointsEngine.CalculateRegisterBonus(req.StoreID)
+	if registerBonus > 0 {
+		member.Points = registerBonus
+		member.TotalPoints = registerBonus
+		if err := s.memberRepo.Update(member); err == nil {
+			record := &model.MemberPointsRecord{
+				MemberID: member.ID,
+				StoreID:  req.StoreID,
+				Type:     "earn",
+				Points:   registerBonus,
+				Balance:  registerBonus,
+				Remark:   "新会员注册赠送积分",
+			}
+			_ = database.DB.Create(record)
+		}
 	}
 
 	member, err = s.memberRepo.GetByID(member.ID)

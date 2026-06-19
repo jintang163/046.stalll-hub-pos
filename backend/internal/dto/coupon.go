@@ -7,6 +7,7 @@ import (
 )
 
 type CouponCreateDTO struct {
+	RuleKey           string          `json:"rule_key" binding:"max=50"`
 	Name              string          `json:"name" binding:"required,max=100"`
 	Type              string          `json:"type" binding:"required,oneof=fixed percentage"`
 	Value             decimal.Decimal `json:"value" binding:"required,min=0.01"`
@@ -27,6 +28,7 @@ type CouponCreateDTO struct {
 }
 
 type CouponUpdateDTO struct {
+	RuleKey           string          `json:"rule_key" binding:"max=50"`
 	Name              string          `json:"name" binding:"max=100"`
 	Value             decimal.Decimal `json:"value" binding:"min=0.01"`
 	MinAmount         decimal.Decimal `json:"min_amount" binding:"min=0"`
@@ -55,6 +57,7 @@ type CouponQueryDTO struct {
 
 type CouponResponse struct {
 	ID                uint            `json:"id"`
+	RuleKey           string          `json:"rule_key"`
 	Name              string          `json:"name"`
 	Type              string          `json:"type"`
 	Value             decimal.Decimal `json:"value"`

@@ -3,6 +3,7 @@ package repository
 import (
 	"time"
 
+	"github.com/shopspring/decimal"
 	"stalll-hub-pos/backend/internal/model"
 	"stalll-hub-pos/backend/pkg/database"
 
@@ -123,6 +124,14 @@ func (r *MemberRepository) AdjustPoints(id uint, points int, remark string, orde
 		}
 		return tx.Create(record).Error
 	})
+}
+
+func (r *MemberRepository) IncrementConsume(id uint, amount decimal.Decimal, orderCount int) error {
+	return database.DB.Model(&model.Member{}).Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"total_consume": gorm.Expr("total_consume + ?", amount),
+			"order_count":   gorm.Expr("order_count + ?", orderCount),
+		}).Error
 }
 
 func (r *MemberRepository) GetPointsRecords(memberID, storeID uint, recordType, startDate, endDate string, page, pageSize int) ([]model.PointsRecord, int64, error) {

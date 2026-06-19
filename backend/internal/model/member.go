@@ -57,6 +57,7 @@ type MemberPointsRecord struct {
 type Coupon struct {
 	BaseModel
 	StoreID         uint            `gorm:"not null;index" json:"store_id"`
+	RuleKey         string          `gorm:"size:50;index" json:"rule_key"`
 	Name            string          `gorm:"size:100;not null" json:"name"`
 	Type            string          `gorm:"size:20;not null" json:"type"`
 	Value           decimal.Decimal `gorm:"type:decimal(10,2);not null" json:"value"`
