@@ -28,6 +28,8 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 	paymentHandler := handler.NewPaymentHandler()
 	tableHandler := handler.NewTableHandler()
 	recommendHandler := handler.NewRecommendHandler()
+	pointsRuleHandler := handler.NewPointsRuleHandler()
+	rechargeActivityHandler := handler.NewRechargeActivityHandler()
 
 	orderHandler := handler.NewOrderHandler(nil)
 
@@ -241,6 +243,35 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 		storesMap := api.Group("/store-map")
 		{
 			storesMap.GET("", tableHandler.GetStoreMap)
+		}
+
+		pointsRules := api.Group("/points-rules")
+		pointsRules.Use(middleware.JWTAuth())
+		{
+			pointsRules.POST("", pointsRuleHandler.CreateRule)
+			pointsRules.GET("", pointsRuleHandler.ListRules)
+			pointsRules.GET("/:id", pointsRuleHandler.GetRule)
+			pointsRules.PUT("/:id", pointsRuleHandler.UpdateRule)
+			pointsRules.DELETE("/:id", pointsRuleHandler.DeleteRule)
+			pointsRules.POST("/calculate-earn", pointsRuleHandler.CalculateEarnedPoints)
+			pointsRules.POST("/calculate-redeem", pointsRuleHandler.CalculateRedemptionDiscount)
+		}
+
+		rechargeActivities := api.Group("/recharge-activities")
+		rechargeActivities.Use(middleware.JWTAuth())
+		{
+			rechargeActivities.POST("", rechargeActivityHandler.CreateActivity)
+			rechargeActivities.GET("", rechargeActivityHandler.ListActivities)
+			rechargeActivities.GET("/:id", rechargeActivityHandler.GetActivity)
+			rechargeActivities.PUT("/:id", rechargeActivityHandler.UpdateActivity)
+			rechargeActivities.DELETE("/:id", rechargeActivityHandler.DeleteActivity)
+		}
+
+		memberRecharges := api.Group("/member-recharges")
+		memberRecharges.Use(middleware.JWTAuth())
+		{
+			memberRecharges.POST("", rechargeActivityHandler.ProcessRecharge)
+			memberRecharges.GET("", rechargeActivityHandler.ListRecharges)
 		}
 
 		recommendations := api.Group("/recommendations")

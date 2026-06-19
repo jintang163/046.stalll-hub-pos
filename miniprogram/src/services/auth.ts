@@ -7,6 +7,7 @@ export interface UserInfo {
   avatar: string
   phone: string
   points: number
+  balance: string
   level: number
   level_name: string
 }

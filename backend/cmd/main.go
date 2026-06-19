@@ -55,6 +55,9 @@ func main() {
 		&model.ReportTask{},
 		&model.RecommendConfig{},
 		&model.RecommendResult{},
+		&model.PointsRule{},
+		&model.RechargeActivity{},
+		&model.MemberRecharge{},
 	)
 
 	initDefaultData()
@@ -62,6 +65,8 @@ func main() {
 	initNSQConsumers()
 
 	initRecommendScheduler()
+
+	initMemberScheduler()
 
 	r := api.SetupRouter(database.DB, nsq.Producer)
 
@@ -119,4 +124,10 @@ func initRecommendScheduler() {
 	recService := service.NewRecommendService()
 	recService.StartAutoRefreshScheduler()
 	log.Println("Recommendation auto-refresh scheduler started")
+}
+
+func initMemberScheduler() {
+	schedulerService := service.NewSchedulerService()
+	schedulerService.StartAllSchedulers()
+	log.Println("Member system scheduler started (birthday coupons, recharge activities)")
 }

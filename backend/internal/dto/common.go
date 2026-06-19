@@ -43,3 +43,10 @@ type LoginResponse struct {
 type StatusUpdateRequest struct {
 	Status int `json:"status" binding:"required"`
 }
+
+type PageResponse struct {
+	List  interface{} `json:"list"`
+	Total int64       `json:"total"`
+	Page  int         `json:"page"`
+	Size  int         `json:"size"`
+}

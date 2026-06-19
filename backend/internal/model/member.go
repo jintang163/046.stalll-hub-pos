@@ -78,6 +78,53 @@ type Coupon struct {
 	Store           Store           `gorm:"foreignKey:StoreID" json:"store,omitempty"`
 }
 
+type PointsRule struct {
+	BaseModel
+	StoreID          uint            `gorm:"not null;index" json:"store_id"`
+	RuleKey          string          `gorm:"size:50;not null" json:"rule_key"`
+	RuleName         string          `gorm:"size:100;not null" json:"rule_name"`
+	RuleType         string          `gorm:"size:30;not null" json:"rule_type"`
+	PointsPerYuan    decimal.Decimal `gorm:"type:decimal(10,2);default:1" json:"points_per_yuan"`
+	RedeemRate       decimal.Decimal `gorm:"type:decimal(10,4);default:0.01" json:"redeem_rate"`
+	MinRedeemPoints  int             `gorm:"default:100" json:"min_redeem_points"`
+	BonusPoints      int             `gorm:"default:0" json:"bonus_points"`
+	MinConsumeAmount decimal.Decimal `gorm:"type:decimal(10,2);default:0" json:"min_consume_amount"`
+	Priority         int             `gorm:"default:0" json:"priority"`
+	Status           int             `gorm:"default:1" json:"status"`
+	Store            Store           `gorm:"foreignKey:StoreID" json:"store,omitempty"`
+}
+
+type RechargeActivity struct {
+	BaseModel
+	StoreID      uint            `gorm:"not null;index" json:"store_id"`
+	Name         string          `gorm:"size:100;not null" json:"name"`
+	MinAmount    decimal.Decimal `gorm:"type:decimal(10,2);not null" json:"min_amount"`
+	BonusAmount  decimal.Decimal `gorm:"type:decimal(10,2);default:0" json:"bonus_amount"`
+	BonusPoints  int             `gorm:"default:0" json:"bonus_points"`
+	BonusCouponID uint           `json:"bonus_coupon_id"`
+	StartTime    *time.Time      `json:"start_time"`
+	EndTime      *time.Time      `json:"end_time"`
+	AutoActivate bool            `gorm:"default:false" json:"auto_activate"`
+	Status       int             `gorm:"default:0" json:"status"`
+	Description  string          `gorm:"size:500" json:"description"`
+	Store        Store           `gorm:"foreignKey:StoreID" json:"store,omitempty"`
+}
+
+type MemberRecharge struct {
+	BaseModel
+	StoreID     uint            `gorm:"not null;index" json:"store_id"`
+	MemberID    uint            `gorm:"not null;index" json:"member_id"`
+	Amount      decimal.Decimal `gorm:"type:decimal(10,2);not null" json:"amount"`
+	BonusAmount decimal.Decimal `gorm:"type:decimal(10,2);default:0" json:"bonus_amount"`
+	BonusPoints int             `gorm:"default:0" json:"bonus_points"`
+	ActivityID  uint            `json:"activity_id"`
+	PayMethod   string          `gorm:"size:20" json:"pay_method"`
+	Status      int             `gorm:"default:1" json:"status"`
+	Store       Store           `gorm:"foreignKey:StoreID" json:"store,omitempty"`
+	Member      Member          `gorm:"foreignKey:MemberID" json:"member,omitempty"`
+	Activity    *RechargeActivity `gorm:"foreignKey:ActivityID" json:"activity,omitempty"`
+}
+
 type MemberCoupon struct {
 	BaseModel
 	StoreID    uint       `gorm:"not null;index" json:"store_id"`

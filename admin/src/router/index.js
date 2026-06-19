@@ -39,6 +39,18 @@ const routes = [
         meta: { title: '会员管理', icon: 'User' }
       },
       {
+        path: 'points-config',
+        name: 'PointsConfig',
+        component: () => import('@/views/points-config/index.vue'),
+        meta: { title: '积分配置', icon: 'Medal' }
+      },
+      {
+        path: 'recharge-activities',
+        name: 'RechargeActivities',
+        component: () => import('@/views/recharge-activities/index.vue'),
+        meta: { title: '充值活动', icon: 'Wallet' }
+      },
+      {
         path: 'coupons',
         name: 'Coupons',
         component: () => import('@/views/coupons/index.vue'),
