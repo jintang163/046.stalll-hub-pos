@@ -285,3 +285,173 @@
   border-radius: 12rpx;
   font-size: 28rpx;
 }
+
+.recommendSection {
+  margin: 24rpx 0 40rpx;
+  background: #fff;
+  border-radius: 20rpx;
+  padding: 28rpx 0 28rpx 32rpx;
+  box-shadow: 0 4rpx 20rpx rgba(102, 126, 234, 0.04);
+}
+
+.recommendHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 32rpx;
+  margin-bottom: 24rpx;
+}
+
+.recommendTitle {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.recommendTitleIcon {
+  font-size: 32rpx;
+}
+
+.recommendTitleText {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #1a1a1a;
+  letter-spacing: 0.5rpx;
+}
+
+.recommendLoading {
+  font-size: 22rpx;
+  color: #999;
+}
+
+.recommendScroll {
+  width: 100%;
+  white-space: nowrap;
+}
+
+.recommendList {
+  display: inline-flex;
+  gap: 20rpx;
+  padding-right: 32rpx;
+}
+
+.recommendCard {
+  display: inline-block;
+  width: 200rpx;
+  vertical-align: top;
+  background: #fafbfc;
+  border-radius: 16rpx;
+  padding: 16rpx;
+  box-sizing: border-box;
+  transition: transform 0.2s;
+  white-space: normal;
+}
+
+.recommendImage {
+  width: 168rpx;
+  height: 168rpx;
+  border-radius: 12rpx;
+  object-fit: cover;
+  display: block;
+  margin-bottom: 14rpx;
+  background: #f0f0f0;
+}
+
+.recommendReason {
+  margin-bottom: 10rpx;
+}
+
+.recommendReason :global(.text) {
+  display: inline-block !important;
+}
+
+.reasonTagCF {
+  display: inline-block;
+  padding: 4rpx 12rpx;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  color: #92400e;
+  border-radius: 8rpx;
+  font-size: 20rpx;
+  font-weight: 500;
+}
+
+.reasonTagHot {
+  display: inline-block;
+  padding: 4rpx 12rpx;
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  color: #991b1b;
+  border-radius: 8rpx;
+  font-size: 20rpx;
+  font-weight: 500;
+}
+
+.reasonTagUser {
+  display: inline-block;
+  padding: 4rpx 12rpx;
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  color: #1e40af;
+  border-radius: 8rpx;
+  font-size: 20rpx;
+  font-weight: 500;
+}
+
+.recommendName {
+  display: block;
+  font-size: 24rpx;
+  color: #333;
+  line-height: 1.4;
+  margin-bottom: 14rpx;
+  min-height: 66rpx;
+  font-weight: 500;
+}
+
+.recommendBottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.recommendPrice {
+  display: flex;
+  align-items: baseline;
+  gap: 2rpx;
+}
+
+.recommendPriceSymbol {
+  font-size: 20rpx;
+  color: #f56c6c;
+  font-weight: 500;
+}
+
+.recommendPriceValue {
+  font-size: 28rpx;
+  color: #f56c6c;
+  font-weight: 700;
+}
+
+.recommendAddBtn {
+  width: 44rpx;
+  height: 44rpx;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4rpx 12rpx rgba(102, 126, 234, 0.35);
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.recommendAddBtnLoading {
+  opacity: 0.6;
+  background: linear-gradient(135deg, #a0aec0 0%, #718096 100%);
+  box-shadow: none;
+}
+
+.recommendAddText {
+  color: #fff;
+  font-size: 30rpx;
+  line-height: 1;
+  font-weight: 700;
+  margin-top: -2rpx;
+}

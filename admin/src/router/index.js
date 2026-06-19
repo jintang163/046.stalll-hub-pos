@@ -91,6 +91,12 @@ const routes = [
         name: 'StoresMap',
         component: () => import('@/views/stores/map.vue'),
         meta: { title: '门店地图', icon: 'Location' }
+      },
+      {
+        path: 'recommendations',
+        name: 'Recommendations',
+        component: () => import('@/views/recommendations/index.vue'),
+        meta: { title: '智能推荐', icon: 'MagicStick' }
       }
     ]
   }

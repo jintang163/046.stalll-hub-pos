@@ -8,6 +8,7 @@ import (
 	"stalll-hub-pos/backend/internal/service"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v4"
 )
 
 type RecommendHandler struct {
@@ -38,6 +39,11 @@ func (h *RecommendHandler) GetConfig(c *gin.Context) {
 		return
 	}
 	middleware.Success(c, cfg)
+}
+
+func (h *RecommendHandler) GetConfigMeta(c *gin.Context) {
+	meta := h.recommendService.GetConfigMeta()
+	middleware.Success(c, meta)
 }
 
 func (h *RecommendHandler) UpdateConfig(c *gin.Context) {
@@ -124,7 +130,38 @@ func (h *RecommendHandler) GetCartRecommendations(c *gin.Context) {
 		return
 	}
 
-	list, err := h.recommendService.GetCartRecommendations(storeID, req.ProductIDs, req.Count)
+	memberID := req.MemberID
+	userID := req.UserID
+
+	if memberID == 0 && userID == 0 {
+		claimsVal, exists := c.Get("jwt_claims")
+		if exists {
+			if claims, ok := claimsVal.(jwt.MapClaims); ok {
+				if mid, ok := claims["member_id"].(float64); ok && mid > 0 {
+					memberID = uint(mid)
+				}
+				if uid, ok := claims["user_id"].(float64); ok && uid > 0 {
+					userID = uint(uid)
+				}
+			}
+		}
+		if memberID == 0 && userID == 0 {
+			authHeader := c.GetHeader("X-Member-ID")
+			if authHeader != "" {
+				if id, err := strconv.ParseUint(authHeader, 10, 32); err == nil {
+					memberID = uint(id)
+				}
+			}
+			authHeader = c.GetHeader("X-User-ID")
+			if authHeader != "" && userID == 0 {
+				if id, err := strconv.ParseUint(authHeader, 10, 32); err == nil {
+					userID = uint(id)
+				}
+			}
+		}
+	}
+
+	list, err := h.recommendService.GetCartRecommendations(storeID, req.ProductIDs, memberID, userID, req.Count)
 	if err != nil {
 		middleware.Error(c, "获取推荐失败: "+err.Error())
 		return

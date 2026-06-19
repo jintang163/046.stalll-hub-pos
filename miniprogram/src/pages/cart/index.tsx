@@ -1,14 +1,17 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { View, Text, Image, ScrollView, Checkbox } from '@tarojs/components'
-import Taro from '@tarojs/taro'
+import Taro, { useDidShow } from '@tarojs/taro'
 import { Button, Dialog, Toast } from '@nutui/nutui-react-taro'
 import { useCartStore, CartItem } from '../../store/cart'
 import { useAppStore } from '../../store/app'
+import { getCartRecommendations, RecommendItem } from '../../services/recommend'
+import { getProductDetail } from '../../services/product'
 import styles from './index.module.scss'
 
 const Cart: React.FC = () => {
   const items = useCartStore(state => state.items)
-  const total = useCartStore(state => state.total())
+  const addItem = useCartStore(state => state.addItem)
+  const total = useCartStore(state => state.total)
   const updateQuantity = useCartStore(state => state.updateQuantity)
   const removeItem = useCartStore(state => state.removeItem)
   const clear = useCartStore(state => state.clear)
@@ -17,12 +20,16 @@ const Cart: React.FC = () => {
   const tableNo = useCartStore(state => state.tableNo)
   const remark = useCartStore(state => state.remark)
   const currentStore = useAppStore(state => state.currentStore)
+  const user = useAppStore(state => state.user)
 
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set(items.map(i => i.id)))
   const [showClearDialog, setShowClearDialog] = useState(false)
   const [showTableDialog, setShowTableDialog] = useState(false)
   const [tableInput, setTableInput] = useState(tableNo)
   const [remarkInput, setRemarkInput] = useState(remark)
+  const [recommendList, setRecommendList] = useState<RecommendItem[]>([])
+  const [recommendLoading, setRecommendLoading] = useState(false)
+  const [addingIds, setAddingIds] = useState<Set<number>>(new Set())
 
   const toggleSelect = (id: string) => {
     const newSelected = new Set(selectedItems)
@@ -92,6 +99,88 @@ const Cart: React.FC = () => {
     setTableInput(tableNo)
     setRemarkInput(remark)
     setShowTableDialog(true)
+  }
+
+  const cartProductIds = useMemo(() => {
+    const set = new Set<number>()
+    items.forEach(i => set.add(i.product_id))
+    return Array.from(set)
+  }, [items])
+
+  const loadRecommendations = async () => {
+    if (!currentStore) return
+    setRecommendLoading(true)
+    try {
+      const memberId = user?.id || (user as any)?.member_id
+      const userId = (user as any)?.user_id || user?.id
+      const list = await getCartRecommendations(
+        currentStore.id,
+        cartProductIds,
+        8,
+        memberId,
+        userId
+      )
+      setRecommendList(list || [])
+    } catch (e) {
+      setRecommendList([])
+    } finally {
+      setRecommendLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadRecommendations()
+  }, [cartProductIds.length, currentStore?.id, user?.id])
+
+  useDidShow(() => {
+    loadRecommendations()
+  })
+
+  const handleAddRecommend = async (item: RecommendItem) => {
+    if (addingIds.has(item.product_id)) return
+    setAddingIds(prev => new Set(prev).add(item.product_id))
+    try {
+      const product = await getProductDetail(item.product_id)
+      if (!product || !product.skus || product.skus.length === 0) {
+        Taro.showToast({ title: '商品已下架', icon: 'none' })
+        return
+      }
+      const defaultSKU = product.skus[0]
+      const attrs: any[] = []
+      if (product.attributes && product.attributes.length > 0) {
+        product.attributes.forEach(attr => {
+          const firstVal = attr.values?.[0]
+          if (firstVal) {
+            attrs.push({ attr_id: attr.id, attr_name: attr.name, value: firstVal })
+          }
+        })
+      }
+      addItem(product, defaultSKU, attrs, 1)
+      Taro.showToast({ title: '已加入购物车', icon: 'success' })
+    } catch (e: any) {
+      Taro.showToast({ title: e?.message || '添加失败', icon: 'none' })
+    } finally {
+      setAddingIds(prev => {
+        const next = new Set(prev)
+        next.delete(item.product_id)
+        return next
+      })
+    }
+  }
+
+  const getReasonTagClass = (reasonType: string) => {
+    switch (reasonType) {
+      case 'cf':
+      case 'cf_hot':
+        return styles.reasonTagCF
+      case 'hot':
+        return styles.reasonTagHot
+      case 'user_history':
+      case 'user_favorite':
+        return styles.reasonTagUser
+      default:
+        return ''
+    }
   }
 
   if (items.length === 0) {
@@ -177,6 +266,53 @@ const Cart: React.FC = () => {
         <View className={styles.clearRow} onClick={handleClear}>
           <Text className={styles.clearText}>清空购物车</Text>
         </View>
+
+        {recommendList.length > 0 && (
+          <View className={styles.recommendSection}>
+            <View className={styles.recommendHeader}>
+              <View className={styles.recommendTitle}>
+                <Text className={styles.recommendTitleIcon}>✨</Text>
+                <Text className={styles.recommendTitleText}>常一起购买</Text>
+              </View>
+              {recommendLoading && (
+                <Text className={styles.recommendLoading}>加载中...</Text>
+              )}
+            </View>
+            <ScrollView scrollX className={styles.recommendScroll} enhanced showScrollbar={false}>
+              <View className={styles.recommendList}>
+                {recommendList.map(item => (
+                  <View
+                    key={item.product_id}
+                    className={styles.recommendCard}
+                  >
+                    <Image
+                      className={styles.recommendImage}
+                      src={item.main_image || 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=delicious%20food&image_size=square'}
+                    />
+                    <View className={styles.recommendReason}>
+                      <Text className={getReasonTagClass(item.reason_type)}>{item.reason}</Text>
+                    </View>
+                    <Text className={styles.recommendName} numberOfLines={1}>{item.product_name}</Text>
+                    <View className={styles.recommendBottom}>
+                      <View className={styles.recommendPrice}>
+                        <Text className={styles.recommendPriceSymbol}>¥</Text>
+                        <Text className={styles.recommendPriceValue}>{parseFloat(item.price).toFixed(2)}</Text>
+                      </View>
+                      <View
+                        className={`${styles.recommendAddBtn} ${addingIds.has(item.product_id) ? styles.recommendAddBtnLoading : ''}`}
+                        onClick={() => handleAddRecommend(item)}
+                      >
+                        <Text className={styles.recommendAddText}>
+                          {addingIds.has(item.product_id) ? '...' : '+'}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </ScrollView>
+          </View>
+        )}
       </ScrollView>
 
       <View className={styles.footer}>

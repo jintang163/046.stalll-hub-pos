@@ -49,14 +49,17 @@ func (s *RecommendService) GetOrCreateConfig(storeID uint) (*model.RecommendConf
 
 	cfg = &model.RecommendConfig{
 		StoreID:                 storeID,
-		CFWeight:                0.6,
-		HotWeight:               0.3,
+		CFWeight:                0.5,
+		HotWeight:               0.25,
+		UserHistoryWeight:       0.25,
 		CategoryDiversityWeight: 0.1,
 		RecommendCount:          8,
 		MinOrderPairs:           3,
 		MinSimilarity:           0.05,
 		HotDays:                 30,
 		CFDays:                  90,
+		UserHistoryDays:         180,
+		UserHistoryTopK:         20,
 		Enabled:                 true,
 		AutoRefresh:             true,
 		RefreshIntervalHours:    6,
@@ -80,6 +83,9 @@ func (s *RecommendService) UpdateConfig(storeID uint, req *dto.UpdateRecommendCo
 	if req.HotWeight != nil {
 		cfg.HotWeight = *req.HotWeight
 	}
+	if req.UserHistoryWeight != nil {
+		cfg.UserHistoryWeight = *req.UserHistoryWeight
+	}
 	if req.CategoryDiversityWeight != nil {
 		cfg.CategoryDiversityWeight = *req.CategoryDiversityWeight
 	}
@@ -97,6 +103,12 @@ func (s *RecommendService) UpdateConfig(storeID uint, req *dto.UpdateRecommendCo
 	}
 	if req.CFDays != nil {
 		cfg.CFDays = *req.CFDays
+	}
+	if req.UserHistoryDays != nil {
+		cfg.UserHistoryDays = *req.UserHistoryDays
+	}
+	if req.UserHistoryTopK != nil {
+		cfg.UserHistoryTopK = *req.UserHistoryTopK
 	}
 	if req.Enabled != nil {
 		cfg.Enabled = *req.Enabled
@@ -371,21 +383,21 @@ func (s *RecommendService) applyCategoryDiversity(ranked []*model.RecommendResul
 	return selected
 }
 
-func (s *RecommendService) GetCartRecommendations(storeID uint, productIDs []uint, count int) ([]dto.RecommendItemDTO, error) {
+func (s *RecommendService) GetCartRecommendations(storeID uint, productIDs []uint, memberID uint, userID uint, count int) ([]dto.RecommendItemDTO, error) {
 	cfg, err := s.GetOrCreateConfig(storeID)
 	if err != nil {
 		return nil, err
 	}
 
 	if !cfg.Enabled {
-		return s.getFallbackHotRecommendations(storeID, count)
+		return s.getFallbackHotRecommendations(storeID, memberID, userID, count)
 	}
 
 	if count <= 0 {
 		count = cfg.RecommendCount
 	}
 
-	cacheKey := s.buildCacheKey(storeID, productIDs, count)
+	cacheKey := s.buildCacheKey(storeID, productIDs, memberID, userID, count)
 	if cached, err := s.getRecommendFromCache(cacheKey); err == nil && len(cached) > 0 {
 		return cached, nil
 	}
@@ -397,9 +409,25 @@ func (s *RecommendService) GetCartRecommendations(storeID uint, productIDs []uin
 		}
 	}
 
+	historyProducts, _ := s.recRepo.GetMemberHistoryProducts(storeID, memberID, userID, cfg.UserHistoryDays, cfg.UserHistoryTopK)
+	historyBoostMap := make(map[uint]float64)
+	historyInfoMap := make(map[uint]repository.UserHistoryProduct)
+	for _, h := range historyProducts {
+		historyBoostMap[h.ProductID] = h.HistoryScore
+		historyInfoMap[h.ProductID] = h
+	}
+	historyProductIDs := make([]uint, 0, len(historyProducts))
+	for _, h := range historyProducts {
+		historyProductIDs = append(historyProductIDs, h.ProductID)
+	}
+
+	queryIDs := make([]uint, 0, len(inputIDs)+len(historyProductIDs))
+	queryIDs = append(queryIDs, inputIDs...)
+	queryIDs = append(queryIDs, historyProductIDs...)
+
 	results := []model.RecommendResult{}
-	if len(inputIDs) > 0 {
-		dbResults, err := s.recRepo.GetResultsByProducts(storeID, inputIDs, count)
+	if len(queryIDs) > 0 {
+		dbResults, err := s.recRepo.GetResultsByProducts(storeID, queryIDs, count)
 		if err == nil {
 			results = dbResults
 		}
@@ -411,6 +439,11 @@ func (s *RecommendService) GetCartRecommendations(storeID uint, productIDs []uin
 		inputSet[pid] = true
 	}
 
+	totalWeight := cfg.CFWeight + cfg.HotWeight + cfg.UserHistoryWeight + cfg.CategoryDiversityWeight
+	if totalWeight <= 0 {
+		totalWeight = 1.0
+	}
+
 	for _, r := range results {
 		if inputSet[r.RecommendProductID] {
 			continue
@@ -418,25 +451,78 @@ func (s *RecommendService) GetCartRecommendations(storeID uint, productIDs []uin
 		if r.RecommendProduct.ID == 0 || r.RecommendProduct.Status != 1 {
 			continue
 		}
+		userBoost := 0.0
+		if hs, ok := historyBoostMap[r.ProductID]; ok {
+			userBoost = hs * cfg.UserHistoryWeight / totalWeight
+		}
+		finalScore := r.Score + userBoost
+
+		reason := r.Reason
+		reasonType := "cf_hot"
+		if userBoost > 0 && userBoost > r.Score*0.5 {
+			reason = "根据你的喜好推荐"
+			reasonType = "user_history"
+		} else if r.CFScore > r.HotScore {
+			reasonType = "cf"
+		} else if r.HotScore > 0 {
+			reasonType = "hot"
+		}
+
 		if existing, ok := merged[r.RecommendProductID]; ok {
-			if r.Score > existing.Score {
-				existing.Score = r.Score
-				existing.Reason = r.Reason
+			if finalScore > existing.Score {
+				existing.Score = finalScore
+				existing.Reason = reason
+				existing.ReasonType = reasonType
 			}
 			continue
 		}
 		price := decimal.Zero
+		skuID := uint(0)
 		if len(r.RecommendProduct.SKUs) > 0 {
 			price = r.RecommendProduct.SKUs[0].Price
+			skuID = r.RecommendProduct.SKUs[0].ID
 		}
 		merged[r.RecommendProductID] = &dto.RecommendItemDTO{
 			ProductID:   r.RecommendProductID,
 			ProductName: r.RecommendProduct.Name,
 			CategoryID:  r.RecommendProduct.CategoryID,
 			MainImage:   r.RecommendProduct.MainImage,
+			SKUID:       skuID,
 			Price:       price.String(),
-			Score:       r.Score,
-			Reason:      r.Reason,
+			Score:       finalScore,
+			Reason:      reason,
+			ReasonType:  reasonType,
+		}
+	}
+
+	for _, h := range historyProducts {
+		if inputSet[h.ProductID] {
+			continue
+		}
+		if _, exists := merged[h.ProductID]; exists {
+			continue
+		}
+		product, err := s.productRepo.GetByID(h.ProductID)
+		if err != nil || product == nil || product.Status != 1 {
+			continue
+		}
+		price := decimal.Zero
+		skuID := uint(0)
+		if len(product.SKUs) > 0 {
+			price = product.SKUs[0].Price
+			skuID = product.SKUs[0].ID
+		}
+		finalScore := h.HistoryScore * cfg.UserHistoryWeight / totalWeight
+		merged[h.ProductID] = &dto.RecommendItemDTO{
+			ProductID:   h.ProductID,
+			ProductName: h.ProductName,
+			CategoryID:  h.CategoryID,
+			MainImage:   product.MainImage,
+			SKUID:       skuID,
+			Price:       price.String(),
+			Score:       finalScore,
+			Reason:      "你常买的",
+			ReasonType:  "user_favorite",
 		}
 	}
 
@@ -449,7 +535,7 @@ func (s *RecommendService) GetCartRecommendations(storeID uint, productIDs []uin
 	})
 
 	if len(list) < count {
-		hotItems, _ := s.getFallbackHotRecommendations(storeID, count)
+		hotItems, _ := s.getFallbackHotRecommendations(storeID, memberID, userID, count)
 		for _, hi := range hotItems {
 			if _, exists := merged[hi.ProductID]; exists {
 				continue
@@ -473,7 +559,7 @@ func (s *RecommendService) GetCartRecommendations(storeID uint, productIDs []uin
 	return list, nil
 }
 
-func (s *RecommendService) getFallbackHotRecommendations(storeID uint, count int) ([]dto.RecommendItemDTO, error) {
+func (s *RecommendService) getFallbackHotRecommendations(storeID uint, memberID uint, userID uint, count int) ([]dto.RecommendItemDTO, error) {
 	if count <= 0 {
 		count = 8
 	}
@@ -498,19 +584,129 @@ func (s *RecommendService) getFallbackHotRecommendations(storeID uint, count int
 		}
 		product, err := s.productRepo.GetByID(h.ProductID)
 		price := decimal.Zero
-		if err == nil && product != nil && len(product.SKUs) > 0 {
-			price = product.SKUs[0].Price
+		skuID := uint(0)
+		mainImage := ""
+		if err == nil && product != nil {
+			mainImage = product.MainImage
+			if len(product.SKUs) > 0 {
+				price = product.SKUs[0].Price
+				skuID = product.SKUs[0].ID
+			}
 		}
 		result = append(result, dto.RecommendItemDTO{
 			ProductID:   h.ProductID,
 			ProductName: h.ProductName,
 			CategoryID:  h.CategoryID,
+			MainImage:   mainImage,
+			SKUID:       skuID,
 			Score:       h.HotScore,
 			Price:       price.String(),
 			Reason:      "热门推荐",
+			ReasonType:  "hot",
 		})
 	}
 	return result, nil
+}
+
+func (s *RecommendService) GetConfigMeta() []dto.ConfigMetaItem {
+	return []dto.ConfigMetaItem{
+		{
+			Key:         "cf_weight",
+			Label:       "协同过滤权重",
+			Description: "基于全店历史订单共现的ItemCF相似度权重",
+			Min:         0, Max: 1, Step: 0.05,
+			Type: "slider", Unit: "", Default: 0.5,
+		},
+		{
+			Key:         "hot_weight",
+			Label:       "热门推荐权重",
+			Description: "近N天销量排名归一化后的热门商品权重",
+			Min:         0, Max: 1, Step: 0.05,
+			Type: "slider", Default: 0.25,
+		},
+		{
+			Key:         "user_history_weight",
+			Label:       "用户历史权重",
+			Description: "基于当前会员/用户历史购买行为的个性化推荐权重",
+			Min:         0, Max: 1, Step: 0.05,
+			Type: "slider", Default: 0.25,
+		},
+		{
+			Key:         "category_diversity_weight",
+			Label:       "分类多样性权重",
+			Description: "抑制单一分类霸榜的多样性惩罚权重",
+			Min:         0, Max: 1, Step: 0.05,
+			Type: "slider", Default: 0.1,
+		},
+		{
+			Key:         "recommend_count",
+			Label:       "推荐商品数量",
+			Description: "购物车底部\"常一起购买\"区域展示的推荐商品数量",
+			Min:         1, Max: 30, Step: 1,
+			Type: "number", Unit: "件", Default: 8,
+		},
+		{
+			Key:         "min_order_pairs",
+			Label:       "最小共现订单数",
+			Description: "两件商品共同出现的订单数低于该值时不参与相似度计算",
+			Min:         1, Max: 100, Step: 1,
+			Type: "number", Unit: "单", Default: 3,
+		},
+		{
+			Key:         "min_similarity",
+			Label:       "最小相似度阈值",
+			Description: "余弦相似度低于该阈值的商品对被过滤",
+			Min:         0, Max: 1, Step: 0.01,
+			Type: "slider", Default: 0.05,
+		},
+		{
+			Key:         "cf_days",
+			Label:       "协同过滤统计窗口",
+			Description: "用于ItemCF计算的历史订单时间范围",
+			Min:         7, Max: 365, Step: 1,
+			Type: "number", Unit: "天", Default: 90,
+		},
+		{
+			Key:         "hot_days",
+			Label:       "热门榜统计窗口",
+			Description: "热门商品销量统计的时间范围",
+			Min:         1, Max: 365, Step: 1,
+			Type: "number", Unit: "天", Default: 30,
+		},
+		{
+			Key:         "user_history_days",
+			Label:       "用户历史统计窗口",
+			Description: "用户个性化推荐统计的历史订单时间范围",
+			Min:         7, Max: 720, Step: 1,
+			Type: "number", Unit: "天", Default: 180,
+		},
+		{
+			Key:         "user_history_top_k",
+			Label:       "用户历史TopK",
+			Description: "每个用户最多取多少件高频购买商品参与个性化计算",
+			Min:         1, Max: 100, Step: 1,
+			Type: "number", Unit: "件", Default: 20,
+		},
+		{
+			Key:         "enabled",
+			Label:       "启用推荐服务",
+			Description: "关闭后购物车推荐接口直接返回热门榜兜底",
+			Type:        "switch", Default: true,
+		},
+		{
+			Key:         "auto_refresh",
+			Label:       "自动刷新推荐",
+			Description: "是否按周期自动触发离线计算",
+			Type:        "switch", Default: true,
+		},
+		{
+			Key:         "refresh_interval_hours",
+			Label:       "自动刷新间隔",
+			Description: "两次离线计算之间的最小间隔",
+			Min:         1, Max: 720, Step: 1,
+			Type: "number", Unit: "小时", Default: 6,
+		},
+	}
 }
 
 func (s *RecommendService) GetRefreshStatus(storeID uint) (*dto.RefreshStatusDTO, error) {
@@ -578,11 +774,11 @@ func (s *RecommendService) scheduleAllStores() {
 	}
 }
 
-func (s *RecommendService) buildCacheKey(storeID uint, productIDs []uint, count int) string {
+func (s *RecommendService) buildCacheKey(storeID uint, productIDs []uint, memberID uint, userID uint, count int) string {
 	sortedIDs := make([]uint, len(productIDs))
 	copy(sortedIDs, productIDs)
 	sort.Slice(sortedIDs, func(i, j int) bool { return sortedIDs[i] < sortedIDs[j] })
-	return fmt.Sprintf("%s%d:%v:%d", redisRecommendKeyPrefix, storeID, sortedIDs, count)
+	return fmt.Sprintf("%s%d:%d:%d:%v:%d", redisRecommendKeyPrefix, storeID, memberID, userID, sortedIDs, count)
 }
 
 func (s *RecommendService) setRecommendCache(key string, data []dto.RecommendItemDTO) {

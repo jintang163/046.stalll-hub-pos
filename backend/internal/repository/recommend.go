@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"math"
 	"time"
 
 	"gorm.io/gorm"
@@ -127,4 +128,64 @@ func (r *RecommendRepository) GetResultStats(storeID uint) (int, int) {
 		Distinct("product_id").Count(&productCount)
 	r.db.Model(&model.RecommendResult{}).Where("store_id = ?", storeID).Count(&pairCount)
 	return int(productCount), int(pairCount)
+}
+
+type UserHistoryProduct struct {
+	ProductID    uint
+	ProductName  string
+	CategoryID   uint
+	BuyCount     int
+	LastBuyDays  int
+	HistoryScore float64
+}
+
+func (r *RecommendRepository) GetMemberHistoryProducts(storeID uint, memberID uint, userID uint, days int, topK int) ([]UserHistoryProduct, error) {
+	var list []UserHistoryProduct
+	if memberID == 0 && userID == 0 {
+		return list, nil
+	}
+	since := time.Now().AddDate(0, 0, -days)
+
+	query := r.db.Table("order_items oi").
+		Select("oi.product_id, p.name as product_name, p.category_id, "+
+			"SUM(oi.quantity) as buy_count, "+
+			"MIN(DATEDIFF(NOW(), o.created_at)) as last_buy_days").
+		Joins("JOIN orders o ON o.id = oi.order_id").
+		Joins("JOIN products p ON p.id = oi.product_id").
+		Where("o.store_id = ? AND o.order_status IN ? AND o.created_at >= ? AND p.status = 1",
+			storeID, []int{2, 3, 4}, since).
+		Group("oi.product_id, p.name, p.category_id")
+
+	if memberID > 0 {
+		query = query.Where("o.member_id = ?", memberID)
+	} else if userID > 0 {
+		query = query.Where("o.user_id = ?", userID)
+	}
+
+	err := query.Order("buy_count DESC, last_buy_days ASC").
+		Limit(topK).
+		Scan(&list).Error
+
+	if len(list) > 0 {
+		maxCount := 0
+		for _, h := range list {
+			if h.BuyCount > maxCount {
+				maxCount = h.BuyCount
+			}
+		}
+		if maxCount > 0 {
+			for i := range list {
+				freqPart := float64(list[i].BuyCount) / float64(maxCount)
+				recencyPart := 1.0
+				if list[i].LastBuyDays > 0 {
+					recencyPart = 1.0 / math.Log2(float64(list[i].LastBuyDays)+1.0)
+				}
+				if recencyPart > 1 {
+					recencyPart = 1.0
+				}
+				list[i].HistoryScore = 0.7*freqPart + 0.3*recencyPart
+			}
+		}
+	}
+	return list, err
 }
