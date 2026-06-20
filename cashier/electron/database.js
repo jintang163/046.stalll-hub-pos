@@ -24,6 +24,7 @@ class SQLiteDatabase {
     this.db.pragma('synchronous = NORMAL')
     this.createTables()
     this.createIndexes()
+    this.migrateTables()
   }
 
   createTables() {
@@ -106,17 +107,25 @@ class SQLiteDatabase {
       `CREATE TABLE IF NOT EXISTS orders (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         order_no TEXT UNIQUE NOT NULL,
+        store_id INTEGER,
+        stall_id INTEGER,
         total_amount REAL DEFAULT 0,
         discount_amount REAL DEFAULT 0,
         actual_amount REAL DEFAULT 0,
+        pay_amount REAL DEFAULT 0,
+        stall_amount REAL DEFAULT 0,
+        platform_amount REAL DEFAULT 0,
         member_id INTEGER,
         member_name TEXT,
         table_no TEXT,
+        order_type TEXT DEFAULT 'normal',
+        source TEXT DEFAULT 'cashier',
         remark TEXT,
         status INTEGER DEFAULT 0,
         pay_status INTEGER DEFAULT 0,
         pay_method TEXT,
         synced INTEGER DEFAULT 0,
+        sync_status INTEGER DEFAULT 0,
         sync_attempts INTEGER DEFAULT 0,
         last_sync_error TEXT,
         created_at TEXT,
@@ -838,6 +847,110 @@ class SQLiteDatabase {
       stallAmount: result.stall_amount || 0,
       platformAmount: result.platform_amount || 0
     }
+  }
+
+  migrateTables() {
+    try {
+      const alterStmts = [
+        `ALTER TABLE orders ADD COLUMN store_id INTEGER`,
+        `ALTER TABLE orders ADD COLUMN stall_id INTEGER`,
+        `ALTER TABLE orders ADD COLUMN pay_amount REAL DEFAULT 0`,
+        `ALTER TABLE orders ADD COLUMN stall_amount REAL DEFAULT 0`,
+        `ALTER TABLE orders ADD COLUMN platform_amount REAL DEFAULT 0`,
+        `ALTER TABLE orders ADD COLUMN order_type TEXT DEFAULT 'normal'`,
+        `ALTER TABLE orders ADD COLUMN source TEXT DEFAULT 'cashier'`,
+        `ALTER TABLE orders ADD COLUMN sync_status INTEGER DEFAULT 0`,
+        `ALTER TABLE order_items ADD COLUMN stall_id INTEGER`,
+        `ALTER TABLE order_items ADD COLUMN stall_amount REAL DEFAULT 0`,
+        `ALTER TABLE order_items ADD COLUMN platform_amount REAL DEFAULT 0`,
+      ]
+      alterStmts.forEach(sql => {
+        try { this.db.exec(sql) } catch (_) {}
+      })
+    } catch (e) {
+      console.warn('[DB] migrateTables skipped:', e.message)
+    }
+  }
+
+  insertOrder(order) {
+    const tx = this.db.transaction(() => {
+      const insertOrder = this.db.prepare(`
+        INSERT OR REPLACE INTO orders 
+        (order_no, store_id, stall_id, total_amount, discount_amount, actual_amount, pay_amount, stall_amount, platform_amount,
+         member_id, member_name, table_no, order_type, source, remark,
+         status, pay_status, pay_method, synced, sync_status, created_at, updated_at, paid_at)
+        VALUES (@order_no, @store_id, @stall_id, @total_amount, @discount_amount, @actual_amount, @pay_amount, @stall_amount, @platform_amount,
+                @member_id, @member_name, @table_no, @order_type, @source, @remark,
+                @status, @pay_status, @pay_method, @synced, @sync_status, @created_at, @updated_at, @paid_at)
+      `)
+
+      const insertItem = this.db.prepare(`
+        INSERT INTO order_items 
+        (order_no, product_id, product_name, sku_id, sku_name, stall_id, attribute_ids, 
+         attribute_names, price, quantity, subtotal, stall_amount, platform_amount, remark, created_at)
+        VALUES (@order_no, @product_id, @product_name, @sku_id, @sku_name, @stall_id, @attribute_ids,
+                @attribute_names, @price, @quantity, @subtotal, @stall_amount, @platform_amount, @remark, @created_at)
+      `)
+
+      const now = new Date().toISOString()
+      const payStatus = order.pay_status ?? (order.status === 'paid' ? 1 : (order.payStatus || 0))
+      const status = order.status ?? (typeof order.status === 'string' ? (order.status === 'paid' ? 1 : 0) : (order.status || 0))
+      insertOrder.run({
+        order_no: order.order_no || order.orderNo,
+        store_id: order.store_id ?? order.storeId ?? 1,
+        stall_id: order.stall_id ?? order.stallId ?? null,
+        total_amount: order.total_amount ?? order.totalAmount ?? 0,
+        discount_amount: order.discount_amount ?? order.discountAmount ?? 0,
+        actual_amount: order.actual_amount ?? order.actualAmount ?? (order.pay_amount ?? order.payAmount ?? 0),
+        pay_amount: order.pay_amount ?? order.payAmount ?? 0,
+        stall_amount: order.stall_amount ?? order.stallAmount ?? 0,
+        platform_amount: order.platform_amount ?? order.platformAmount ?? 0,
+        member_id: order.member_id ?? order.memberId ?? null,
+        member_name: order.member_name ?? order.memberName ?? '',
+        table_no: order.table_no ?? order.tableNo ?? '',
+        order_type: order.order_type ?? order.orderType ?? 'normal',
+        source: order.source ?? 'stall_pos',
+        remark: order.remark ?? '',
+        status: typeof status === 'string' ? (status === 'paid' ? 1 : 0) : (status ?? 0),
+        pay_status: typeof payStatus === 'string' ? (payStatus === 'paid' ? 1 : 0) : (payStatus ?? 0),
+        pay_method: order.pay_method ?? order.payMethod ?? '',
+        synced: order.synced ?? (order.sync_status === 1 ? 1 : 0),
+        sync_status: order.sync_status ?? order.syncStatus ?? 0,
+        created_at: order.created_at ?? order.createdAt ?? now,
+        updated_at: order.updated_at ?? order.updatedAt ?? now,
+        paid_at: order.paid_at ?? order.paidAt ?? now,
+      })
+
+      if (order.items && order.items.length > 0) {
+        order.items.forEach(item => {
+          insertItem.run({
+            order_no: order.order_no || order.orderNo,
+            product_id: item.product_id ?? item.productId ?? 0,
+            product_name: item.product_name ?? item.productName ?? '',
+            sku_id: item.sku_id ?? item.skuId ?? null,
+            sku_name: item.sku_name ?? item.skuName ?? '',
+            stall_id: item.stall_id ?? item.stallId ?? (order.stall_id ?? order.stallId ?? null),
+            attribute_ids: item.attribute_ids ? JSON.stringify(item.attribute_ids) : '',
+            attribute_names: item.attribute_names ? JSON.stringify(item.attribute_names) : '',
+            price: item.price ?? 0,
+            quantity: item.quantity ?? 1,
+            subtotal: item.subtotal ?? item.amount ?? (item.price ?? 0) * (item.quantity ?? 1),
+            stall_amount: item.stall_amount ?? item.stallAmount ?? 0,
+            platform_amount: item.platform_amount ?? item.platformAmount ?? 0,
+            remark: item.remark ?? '',
+            created_at: order.created_at ?? order.createdAt ?? now,
+          })
+        })
+      }
+    })
+
+    tx()
+    return { success: true, order_no: order.order_no || order.orderNo }
+  }
+
+  getPendingOrderCount() {
+    const row = this.db.prepare(`SELECT COUNT(*) as cnt FROM orders WHERE (sync_status = 0 OR synced = 0)`).get()
+    return row?.cnt || 0
   }
 
   close() {

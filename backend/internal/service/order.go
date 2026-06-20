@@ -742,11 +742,14 @@ func (s *OrderService) publishStallOrders(order *model.Order, action string) {
 			"stall_id":   stallID,
 			"table_no":   order.TableNo,
 			"order_type": order.OrderType,
-			"remark":     order.Remark,
-			"items":      items,
-			"created_at": order.CreatedAt,
+			"total_amount": order.TotalAmount,
+			"pay_amount":   order.PayAmount,
+			"status":       order.OrderStatus,
+			"pay_method":   order.PayMethod,
+			"remark":       order.Remark,
+			"created_at":   order.CreatedAt,
 		}
-		_ = nsq.PublishStallOrder(order.OrderNo, order.StoreID, stallID, stallOrderData, action)
+		_ = nsq.PublishStallOrder(order.OrderNo, order.StoreID, stallID, items, stallOrderData, action)
 	}
 }
 

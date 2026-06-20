@@ -128,7 +128,7 @@ class SettingsPage extends StatelessWidget {
               prefs.setString('api_base_url', controller.text);
               Navigator.of(context).pop();
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('服务器地址已更新'),
+                const SnackBar(content: Text('服务器地址已更新')),
               );
             },
             child: const Text('确定'),

@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:decimal/decimal.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import '../models/order.dart';
 import '../models/stall.dart';
 import '../models/product.dart';
@@ -7,6 +10,7 @@ import '../database/order_database.dart';
 import '../services/api_service.dart';
 import '../services/order_sync_service.dart';
 import '../services/bluetooth_printer_service.dart';
+import '../services/nsq_service.dart';
 
 class CartItem {
   final Product product;
@@ -38,21 +42,48 @@ class CartItem {
   }
 }
 
+class DeviceAlert {
+  final String deviceId;
+  final String deviceName;
+  final String? stallName;
+  final String message;
+  final int offlineMinutes;
+  final DateTime time;
+
+  DeviceAlert({
+    required this.deviceId,
+    required this.deviceName,
+    this.stallName,
+    required this.message,
+    this.offlineMinutes = 0,
+    DateTime? time,
+  }) : time = time ?? DateTime.now();
+}
+
 class OrderProvider with ChangeNotifier {
   final OrderDatabase _orderDb = OrderDatabase();
   final ApiService _api;
   final BluetoothPrinterService _printer;
   OrderSyncService? _syncService;
-  
+  NsqService? _nsqService;
+
   List<CartItem> _cartItems = [];
   Stall? _currentStall;
   List<Order> _orders = [];
   bool _isLoading = false;
   String? _tableNo;
 
+  String? _deviceId;
+  String _appVersion = '1.0.0';
+  Timer? _heartbeatTimer;
+
+  final List<DeviceAlert> _deviceAlerts = [];
+  List<DeviceAlert> get deviceAlerts => _deviceAlerts;
+
   OrderProvider(this._api, this._printer) {
     _syncService = OrderSyncService(_api);
     _syncService!.start();
+    _initDeviceAndHeartbeat();
   }
 
   List<CartItem> get cartItems => _cartItems;
@@ -61,23 +92,160 @@ class OrderProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get tableNo => _tableNo;
   OrderSyncService? get syncService => _syncService;
+  NsqService? get nsqService => _nsqService;
+  String? get deviceId => _deviceId;
 
-  int get cartItemCount => _cartItems.fold(0, (sum, item) => sum + item.quantity);
+  int get cartItemCount =>
+      _cartItems.fold(0, (sum, item) => sum + item.quantity);
 
   Decimal get cartTotal => _cartItems.fold(
-    Decimal.zero,
-    (sum, item) => sum + item.subtotal,
-  );
+        Decimal.zero,
+        (sum, item) => sum + item.subtotal,
+      );
 
   Decimal get stallShare {
     if (_currentStall == null) return Decimal.zero;
     return cartTotal * _currentStall!.revenueRatio;
   }
 
+  Future<void> _initDeviceAndHeartbeat() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      String? savedId = prefs.getString('device_id');
+      if (savedId == null || savedId.isEmpty) {
+        savedId = await _generateDeviceId();
+        await prefs.setString('device_id', savedId);
+      }
+      _deviceId = savedId;
+      print('[Heartbeat] Using deviceId: $_deviceId');
+    } catch (e) {
+      _deviceId = 'FALLBACK-${DateTime.now().millisecondsSinceEpoch}';
+      print('[Heartbeat] Fallback deviceId: $_deviceId');
+    }
+
+    _startHeartbeat();
+  }
+
+  Future<String> _generateDeviceId() async {
+    try {
+      final deviceInfo = DeviceInfoPlugin();
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        final info = await deviceInfo.androidInfo;
+        return 'ANDROID-${info.id}-${info.androidId ?? info.device}';
+      } else if (defaultTargetPlatform == TargetPlatform.iOS) {
+        final info = await deviceInfo.iosInfo;
+        return 'IOS-${info.identifierForVendor ?? info.utsname.machine}';
+      } else if (defaultTargetPlatform == TargetPlatform.macOS) {
+        final info = await deviceInfo.macOsInfo;
+        return 'MACOS-${info.systemGUID ?? info.computerName}';
+      } else if (defaultTargetPlatform == TargetPlatform.windows) {
+        final info = await deviceInfo.windowsInfo;
+        return 'WIN-${info.deviceId}-${info.computerName}';
+      }
+    } catch (e) {
+      print('[DeviceInfo] Error: $e');
+    }
+    return 'DEV-${DateTime.now().millisecondsSinceEpoch}-${DateTime.now().microsecond}';
+  }
+
+  void _startHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 60), (_) {
+      _sendHeartbeat();
+    });
+    Future.delayed(const Duration(seconds: 5), _sendHeartbeat);
+  }
+
+  Future<void> _sendHeartbeat() async {
+    if (_deviceId == null) return;
+    try {
+      await _api.deviceHeartbeat(_deviceId!, _appVersion);
+      print('[Heartbeat] Sent successfully: $_deviceId');
+    } catch (e) {
+      print('[Heartbeat] Failed: $e');
+    }
+  }
+
   void setCurrentStall(Stall stall) {
     _currentStall = stall;
+    _setupNsqAndAlerts();
+    _loadInitialData();
     notifyListeners();
   }
+
+  Future<void> _setupNsqAndAlerts() async {
+    try {
+      await _nsqService?.disconnect();
+    } catch (_) {}
+
+    if (_currentStall?.id == null) return;
+
+    _nsqService = NsqService(
+      api: _api,
+      stallId: _currentStall!.id.toString(),
+    );
+
+    _nsqService!.addDeviceAlertListener((alertData) {
+      _handleDeviceAlert(alertData);
+    });
+
+    _nsqService!.addOrderListener((order) {
+      loadOrders();
+    });
+
+    await _nsqService!.connect();
+  }
+
+  void _handleDeviceAlert(dynamic alertData) {
+    try {
+      final deviceName =
+          alertData['device_name'] ?? alertData['deviceName'] ?? '未知设备';
+      final stallName =
+          alertData['stall_name'] ?? alertData['stallName'] ?? _currentStall?.name;
+      final deviceId =
+          alertData['device_id'] ?? alertData['deviceId'] ?? '';
+      final offlineStr = alertData['offline_minutes'] ??
+          alertData['offlineMinutes'] ??
+          30;
+      final offlineMinutes = int.tryParse(offlineStr.toString()) ?? 30;
+
+      final msg = '设备【$deviceName】已离线超过 $offlineMinutes 分钟，请检查连接';
+
+      final alert = DeviceAlert(
+        deviceId: deviceId.toString(),
+        deviceName: deviceName,
+        stallName: stallName,
+        message: msg,
+        offlineMinutes: offlineMinutes,
+      );
+
+      final exists = _deviceAlerts.any((a) =>
+          a.deviceId == alert.deviceId &&
+          a.time.difference(DateTime.now()).abs().inMinutes < 30);
+
+      if (!exists) {
+        _deviceAlerts.insert(0, alert);
+        if (_deviceAlerts.length > 20) _deviceAlerts.removeLast();
+        notifyListeners();
+      }
+    } catch (e) {
+      print('[Alert] Handle error: $e');
+    }
+  }
+
+  void dismissAlert(int index) {
+    if (index >= 0 && index < _deviceAlerts.length) {
+      _deviceAlerts.removeAt(index);
+      notifyListeners();
+    }
+  }
+
+  Future<void> _loadInitialData() async {
+    await loadProductsCache();
+    await loadOrders();
+  }
+
+  Future<void> loadProductsCache() async {}
 
   void setTableNo(String? tableNo) {
     _tableNo = tableNo;
@@ -256,6 +424,8 @@ class OrderProvider with ChangeNotifier {
   @override
   void dispose() {
     _syncService?.stop();
+    _nsqService?.disconnect();
+    _heartbeatTimer?.cancel();
     super.dispose();
   }
 }

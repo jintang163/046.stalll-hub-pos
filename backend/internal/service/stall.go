@@ -87,7 +87,7 @@ func (s *StallService) CreateStall(req *dto.StallCreateDTO) (*model.Stall, error
 		return nil, err
 	}
 
-	nsq.PublishStallChange("create", req.StoreID, stall.ID, stall)
+	nsq.PublishStallChange("create", req.StoreID, stall.ID, stall.StallNo, stall.Name, stall.Status, stall)
 
 	return s.stallRepo.GetByID(stall.ID)
 }
@@ -132,7 +132,7 @@ func (s *StallService) UpdateStall(id uint, req *dto.StallUpdateDTO) (*model.Sta
 		return nil, err
 	}
 
-	nsq.PublishStallChange("update", stall.StoreID, stall.ID, stall)
+	nsq.PublishStallChange("update", stall.StoreID, stall.ID, stall.StallNo, stall.Name, stall.Status, stall)
 
 	return s.stallRepo.GetByID(id)
 }
@@ -146,7 +146,7 @@ func (s *StallService) DeleteStall(id uint) error {
 	if err != nil {
 		return err
 	}
-	nsq.PublishStallChange("delete", stall.StoreID, id, nil)
+	nsq.PublishStallChange("delete", stall.StoreID, id, stall.StallNo, stall.Name, 0, nil)
 	return nil
 }
 
@@ -832,23 +832,51 @@ func (s *StallService) GetDailyReport(query *dto.StallDailyReportQueryDTO) ([]dt
 	return response, nil
 }
 
-func (s *StallService) CheckOfflineDevices() []model.StallDevice {
+func (s *StallService) CheckOfflineDevices() (int, error) {
 	devices, _, err := s.deviceRepo.List(0, 0, 1, 1000)
 	if err != nil {
 		log.Printf("检查离线设备失败: %v", err)
-		return nil
+		return 0, err
 	}
 
-	var offlineDevices []model.StallDevice
+	alertCount := 0
 	threshold := time.Now().Add(-StallDeviceOfflineThreshold)
 
 	for _, device := range devices {
 		if device.LastHeartbeatAt == nil || device.LastHeartbeatAt.Before(threshold) {
 			key := fmt.Sprintf(StallDeviceOnlineKey, device.DeviceID)
 			pkgredis.Del(key)
-			offlineDevices = append(offlineDevices, device)
+
+			offlineMinutes := 0
+			if device.LastHeartbeatAt != nil {
+				offlineMinutes = int(time.Since(*device.LastHeartbeatAt).Minutes())
+			} else {
+				offlineMinutes = int(StallDeviceOfflineThreshold.Minutes()) + 1
+			}
+
+			stallName := ""
+			if device.Stall.Name != "" {
+				stallName = device.Stall.Name
+			}
+
+			alertErr := nsq.PublishStallDeviceAlert(
+				device.ID,
+				device.DeviceName,
+				device.DeviceID,
+				stallName,
+				device.StoreID,
+				device.StallID,
+				"offline",
+				offlineMinutes,
+				0,
+			)
+			if alertErr != nil {
+				log.Printf("发送设备告警失败: device=%d, err=%v", device.ID, alertErr)
+			}
+
+			alertCount++
 		}
 	}
 
-	return offlineDevices
+	return alertCount, nil
 }

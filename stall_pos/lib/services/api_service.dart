@@ -102,4 +102,33 @@ class ApiService {
     });
     return response.data['data'];
   }
+
+  Future<List<Order>> getNewOrders(int stallId, {String? lastOrderNo, int limit = 50}) async {
+    final params = <String, dynamic>{
+      'stall_id': stallId,
+      'page_size': limit,
+      'status': 'paid',
+    };
+    if (lastOrderNo != null && lastOrderNo.isNotEmpty) {
+      params['last_order_no'] = lastOrderNo;
+    }
+    final response = await _dio.get('/orders', queryParameters: params);
+    final data = response.data['data']['list'] as List? ?? response.data['data'] as List? ?? [];
+    return data.map((e) => Order.fromJson(e)).toList();
+  }
+
+  Future<List<dynamic>> getDeviceAlerts({int? stallId, int limit = 20}) async {
+    final params = <String, dynamic>{
+      'page': 1,
+      'page_size': limit,
+    };
+    if (stallId != null) params['stall_id'] = stallId;
+    try {
+      final response = await _dio.get('/stall-devices', queryParameters: params);
+      final list = response.data['data']['list'] as List? ?? response.data['data'] as List? ?? [];
+      return list.where((d) => (d['is_online'] == false || d['status'] == 0)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
 }

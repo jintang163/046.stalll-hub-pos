@@ -13,6 +13,7 @@ import (
 	"stalll-hub-pos/backend/pkg/nsq"
 	"stalll-hub-pos/backend/pkg/redis"
 
+	"github.com/shopspring/decimal"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -60,6 +61,12 @@ func main() {
 		&model.PointsRule{},
 		&model.RechargeActivity{},
 		&model.MemberRecharge{},
+		&model.Stall{},
+		&model.StallDevice{},
+		&model.StallUser{},
+		&model.StallSettlement{},
+		&model.StallSettlementItem{},
+		&model.StallDailyReport{},
 	)
 
 	initDefaultData()
@@ -111,6 +118,78 @@ func initDefaultData() {
 			}
 			database.DB.Create(user)
 			log.Println("Default admin user created: admin/admin123")
+		}
+
+		initDefaultStallData(store.ID)
+	}
+}
+
+func initDefaultStallData(storeID uint) {
+	var stallCount int64
+	database.DB.Model(&model.Stall{}).Where("store_id = ?", storeID).Count(&stallCount)
+	if stallCount == 0 {
+		stalls := []model.Stall{
+			{
+				StoreID:       storeID,
+				StallNo:       "ST001",
+				Name:          "烧烤档",
+				RevenueRatio:  decimal.RequireFromString("0.7000"),
+				PlatformRatio: decimal.RequireFromString("0.3000"),
+				ContactName:   "张师傅",
+				ContactPhone:  "13800000001",
+				Status:        1,
+				Sort:          1,
+				Remark:        "主营各类烧烤、烤串",
+			},
+			{
+				StoreID:       storeID,
+				StallNo:       "ST002",
+				Name:          "饮品档",
+				RevenueRatio:  decimal.RequireFromString("0.7500"),
+				PlatformRatio: decimal.RequireFromString("0.2500"),
+				ContactName:   "李小姐",
+				ContactPhone:  "13800000002",
+				Status:        1,
+				Sort:          2,
+				Remark:        "主营饮品、奶茶、咖啡",
+			},
+			{
+				StoreID:       storeID,
+				StallNo:       "ST003",
+				Name:          "凉菜档",
+				RevenueRatio:  decimal.RequireFromString("0.6500"),
+				PlatformRatio: decimal.RequireFromString("0.3500"),
+				ContactName:   "王师傅",
+				ContactPhone:  "13800000003",
+				Status:        1,
+				Sort:          3,
+				Remark:        "主营各类凉菜、卤味",
+			},
+		}
+		for i := range stalls {
+			database.DB.Create(&stalls[i])
+		}
+		log.Printf("Created %d default stalls", len(stalls))
+
+		var stallUserCount int64
+		database.DB.Model(&model.StallUser{}).Count(&stallUserCount)
+		if stallUserCount == 0 {
+			for i, stall := range stalls {
+				usernames := []string{"shaokao", "yinpin", "liangcai"}
+				names := []string{"张师傅", "李小姐", "王师傅"}
+				hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("stall123"), bcrypt.DefaultCost)
+				stallUser := &model.StallUser{
+					StoreID:    storeID,
+					StallID:    stall.ID,
+					Username:   usernames[i],
+					Password:   string(hashedPassword),
+					RealName:   names[i],
+					Phone:      stall.ContactPhone,
+					Status:     1,
+				}
+				database.DB.Create(stallUser)
+			}
+			log.Println("Created default stall users: shaokao/staff123, yinpin/staff123, liangcai/staff123")
 		}
 	}
 }

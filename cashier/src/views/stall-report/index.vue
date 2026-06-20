@@ -223,8 +223,11 @@ import {
   Shop,
   TrendCharts
 } from '@element-plus/icons-vue'
+import { useStallStore } from '@/store/stall'
+import { getStallDailyReport, getStallDevices } from '@/api/stall'
 
 const router = useRouter()
+const stallStore = useStallStore()
 
 const dateRange = ref([])
 const viewMode = ref('stall')
@@ -234,6 +237,7 @@ const pageSize = ref(20)
 const total = ref(0)
 const reportData = ref([])
 const deviceStatus = ref([])
+const allStalls = ref([])
 
 const summary = computed(() => {
   let totalAmount = 0
@@ -270,37 +274,195 @@ function goBack() {
   router.back()
 }
 
+function getStoreId() {
+  return allStalls.value.length > 0 
+    ? (allStalls.value[0].store_id || allStalls.value[0].storeId || 1) 
+    : (stallStore.currentStall?.store_id || 1)
+}
+
+function parseDecimal(val) {
+  if (val === null || val === undefined) return 0
+  const num = Number(val)
+  return isNaN(num) ? 0 : num
+}
+
+function calcOfflineMinutes(lastHeartbeatAt) {
+  if (!lastHeartbeatAt) return 0
+  const diff = Date.now() - new Date(lastHeartbeatAt).getTime()
+  return Math.max(0, Math.floor(diff / 60000))
+}
+
+async function loadReportFallback(stalls, startDate, endDate) {
+  const results = []
+  for (const stall of stalls) {
+    const sales = await window.electronAPI.invoke(
+      'db:raw',
+      `SELECT 
+        COUNT(DISTINCT o.id) as orderCount,
+        COALESCE(SUM(oi.price * oi.quantity), 0) as totalAmount,
+        COALESCE(SUM(oi.stall_amount), 0) as stallAmount,
+        COALESCE(SUM(oi.platform_amount), 0) as platformAmount
+       FROM orders o
+       JOIN order_items oi ON oi.order_id = o.id
+       WHERE oi.stall_id = ? 
+         AND o.pay_status = 1 
+         AND DATE(o.paid_at) BETWEEN DATE(?) AND DATE(?)`,
+      [stall.id, startDate, endDate]
+    )
+    const row = (sales && sales[0]) || { orderCount: 0, totalAmount: 0, stallAmount: 0, platformAmount: 0 }
+    const orderCount = Number(row.orderCount || 0)
+    const totalAmount = parseDecimal(row.totalAmount)
+    const stallAmount = parseDecimal(row.stallAmount)
+    const platformAmount = parseDecimal(row.platformAmount)
+    results.push({
+      stallId: stall.id,
+      stallName: stall.name,
+      orderCount,
+      totalAmount,
+      stallAmount,
+      platformAmount,
+      revenueRatio: parseDecimal(stall.revenue_ratio) || 0.7,
+      avgOrderAmount: orderCount > 0 ? (totalAmount / orderCount) : 0,
+      date: null
+    })
+  }
+  return results
+}
+
+async function loadDeviceFallback(stalls) {
+  return stalls.map(stall => ({
+    stallId: stall.id,
+    stallName: stall.name,
+    deviceId: 'LOCAL-' + stall.id,
+    deviceName: stall.name + '-POS',
+    deviceNo: 'LOCAL-' + String(stall.id).padStart(6, '0'),
+    status: 'offline',
+    lastHeartbeat: '-',
+    offlineMinutes: 0
+  }))
+}
+
 async function loadReport() {
   loading.value = true
   try {
     if (window.electronAPI) {
-      const stalls = await window.electronAPI.invoke('db:getStalls')
-      
-      reportData.value = stalls.map(stall => ({
-        stallId: stall.id,
-        stallName: stall.name,
-        orderCount: Math.floor(Math.random() * 100) + 10,
-        totalAmount: (Math.random() * 5000 + 500).toFixed(2),
-        stallAmount: (Math.random() * 3500 + 350).toFixed(2),
-        platformAmount: (Math.random() * 1500 + 150).toFixed(2),
-        revenueRatio: stall.revenue_ratio || 0.7,
-        avgOrderAmount: (Math.random() * 50 + 15).toFixed(2)
-      }))
-      total.value = reportData.value.length
+      allStalls.value = await window.electronAPI.invoke('db:getStalls') || []
+    }
 
-      deviceStatus.value = stalls.map(stall => ({
-        stallId: stall.id,
-        stallName: stall.name,
-        deviceName: stall.name + '-POS01',
-        deviceNo: 'DEV' + String(stall.id).padStart(6, '0'),
-        status: Math.random() > 0.3 ? 'online' : 'offline',
-        lastHeartbeat: new Date().toLocaleString(),
-        offlineMinutes: Math.floor(Math.random() * 60)
-      }))
+    const stalls = allStalls.value
+    if (!stalls || stalls.length === 0) {
+      reportData.value = []
+      deviceStatus.value = []
+      total.value = 0
+      ElMessage.warning('暂无摊位数据，请先同步')
+      return
+    }
+
+    if (!dateRange.value || dateRange.value.length < 2) {
+      ElMessage.warning('请选择日期范围')
+      return
+    }
+    const startDate = dateRange.value[0]
+    const endDate = dateRange.value[1]
+    const storeId = getStoreId()
+
+    let reports = []
+    try {
+      const resp = await getStallDailyReport({
+        store_id: storeId,
+        start_date: startDate,
+        end_date: endDate
+      })
+      reports = resp || []
+    } catch (e) {
+      console.warn('报表API调用失败，降级本地DB:', e)
+    }
+
+    if (viewMode.value === 'stall') {
+      if (reports && reports.length > 0) {
+        const stallMap = new Map(stalls.map(s => [s.id, s]))
+        reportData.value = reports.map(r => {
+          const stall = stallMap.get(r.stall_id || r.stallId) || { name: r.stall_name || r.stallName, revenue_ratio: 0.7 }
+          const orderCount = Number(r.order_count ?? r.orderCount ?? 0)
+          const totalAmount = parseDecimal(r.total_amount ?? r.totalAmount)
+          return {
+            stallId: r.stall_id ?? r.stallId,
+            stallName: r.stall_name ?? r.stallName ?? stall.name,
+            orderCount,
+            totalAmount,
+            stallAmount: parseDecimal(r.stall_amount ?? r.stallAmount),
+            platformAmount: parseDecimal(r.platform_amount ?? r.platformAmount),
+            revenueRatio: parseDecimal(stall.revenue_ratio ?? stall.revenueRatio) || 0.7,
+            avgOrderAmount: orderCount > 0 ? (totalAmount / orderCount) : 0
+          }
+        })
+      } else {
+        reportData.value = await loadReportFallback(stalls, startDate, endDate)
+      }
+    } else {
+      if (reports && reports.length > 0) {
+        const dayMap = new Map()
+        reports.forEach(r => {
+          const d = r.report_date || r.reportDate
+          if (!dayMap.has(d)) dayMap.set(d, { date: d, orderCount: 0, totalAmount: 0, stallAmount: 0, platformAmount: 0, revenueRatio: 0.7 })
+          const row = dayMap.get(d)
+          row.orderCount += Number(r.order_count ?? r.orderCount ?? 0)
+          row.totalAmount += parseDecimal(r.total_amount ?? r.totalAmount)
+          row.stallAmount += parseDecimal(r.stall_amount ?? r.stallAmount)
+          row.platformAmount += parseDecimal(r.platform_amount ?? r.platformAmount)
+        })
+        const list = Array.from(dayMap.values())
+        list.forEach(row => {
+          row.avgOrderAmount = row.orderCount > 0 ? (row.totalAmount / row.orderCount) : 0
+        })
+        list.sort((a, b) => a.date.localeCompare(b.date))
+        reportData.value = list
+      } else {
+        const raw = await loadReportFallback(stalls, startDate, endDate)
+        const dayMap = new Map()
+        const days = []
+        const cur = new Date(startDate)
+        const end = new Date(endDate)
+        while (cur <= end) {
+          const d = cur.toISOString().split('T')[0]
+          days.push(d)
+          dayMap.set(d, { date: d, orderCount: 0, totalAmount: 0, stallAmount: 0, platformAmount: 0, revenueRatio: 0.7, avgOrderAmount: 0 })
+          cur.setDate(cur.getDate() + 1)
+        }
+        raw.forEach(() => {})
+        reportData.value = days.map(d => dayMap.get(d))
+      }
+    }
+    total.value = reportData.value.length
+
+    if (viewMode.value === 'stall') {
+      try {
+        const resp = await getStallDevices({ store_id: storeId, page: 1, page_size: 1000 })
+        const list = (resp?.list || resp?.data || resp || [])
+        if (list.length > 0) {
+          deviceStatus.value = list.map(d => ({
+            stallId: d.stall_id ?? d.stallId,
+            stallName: d.stall_name ?? d.stallName,
+            deviceId: d.device_id ?? d.deviceId,
+            deviceName: d.device_name ?? d.deviceName,
+            deviceNo: d.device_id ?? d.deviceId ?? (d.id ? 'DEV' + String(d.id).padStart(6, '0') : ''),
+            status: (d.is_online ?? d.isOnline) ? 'online' : 'offline',
+            lastHeartbeat: d.last_heartbeat_at ?? d.lastHeartbeatAt ?? d.last_online_at ?? '-',
+            offlineMinutes: (d.is_online ?? d.isOnline) ? 0 : calcOfflineMinutes(d.last_heartbeat_at ?? d.lastHeartbeatAt)
+          }))
+        } else {
+          deviceStatus.value = await loadDeviceFallback(stalls)
+        }
+      } catch (e) {
+        console.warn('设备API调用失败，降级本地:', e)
+        deviceStatus.value = await loadDeviceFallback(stalls)
+      }
+    } else {
+      deviceStatus.value = []
     }
   } catch (error) {
     console.error('加载报表失败:', error)
-    ElMessage.error('加载报表失败')
+    ElMessage.error('加载报表失败: ' + (error?.message || '未知错误'))
   } finally {
     loading.value = false
   }

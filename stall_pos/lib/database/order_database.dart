@@ -150,6 +150,18 @@ class OrderDatabase {
     );
   }
 
+  Future<bool> orderExists(String orderNo) async {
+    final db = await _dbHelper.database;
+    final maps = await db.query(
+      'orders',
+      columns: ['order_no'],
+      where: 'order_no = ?',
+      whereArgs: [orderNo],
+      limit: 1,
+    );
+    return maps.isNotEmpty;
+  }
+
   Future<Map<String, dynamic>> getDailySummary(int stallId, String date) async {
     final db = await _dbHelper.database;
 

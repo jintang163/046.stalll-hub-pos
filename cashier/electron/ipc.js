@@ -357,6 +357,24 @@ class IPC {
         return { orderCount: 0, totalAmount: 0, stallAmount: 0, platformAmount: 0 }
       }
     })
+
+    ipcMain.handle('db:insertOrder', (_, order) => {
+      try {
+        return db.insertOrder(order)
+      } catch (error) {
+        console.error('[IPC] db:insertOrder error:', error)
+        return { success: false, error: error.message }
+      }
+    })
+
+    ipcMain.handle('db:getPendingOrderCount', () => {
+      try {
+        return db.getPendingOrderCount()
+      } catch (error) {
+        console.error('[IPC] db:getPendingOrderCount error:', error)
+        return 0
+      }
+    })
   }
 
   static initNSQHandlers(ipcMain, nsq, store) {

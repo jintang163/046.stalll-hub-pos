@@ -1,5 +1,7 @@
 package nsq
 
+import "fmt"
+
 const (
 	TopicProductChanged  = "product_change"
 	TopicStockChange     = "stock_change"
@@ -110,60 +112,82 @@ func PublishPrintOrder(orderID uint, orderNo string, storeID uint, printerID uin
 }
 
 type StallChangeMessage struct {
-	Action    string      `json:"action"`
-	StoreID   uint        `json:"store_id"`
-	StallID   uint        `json:"stall_id"`
-	Data      interface{} `json:"data"`
-	Timestamp int64       `json:"timestamp"`
-}
-
-type StallOrderMessage struct {
-	OrderNo    string      `json:"order_no"`
+	ChangeType string      `json:"change_type"`
 	StoreID    uint        `json:"store_id"`
 	StallID    uint        `json:"stall_id"`
-	OrderData  interface{} `json:"order_data"`
-	Action     string      `json:"action"`
+	StallNo    string      `json:"stall_no"`
+	StallName  string      `json:"stall_name"`
+	Status     int         `json:"status"`
+	Data       interface{} `json:"data"`
 	Timestamp  int64       `json:"timestamp"`
 }
 
-type StallDeviceAlertMessage struct {
-	DeviceID   string `json:"device_id"`
-	StallID    uint   `json:"stall_id"`
-	StoreID    uint   `json:"store_id"`
-	AlertType  string `json:"alert_type"`
-	Timestamp  int64  `json:"timestamp"`
+type StallOrderMessage struct {
+	OrderNo   string      `json:"order_no"`
+	StoreID   uint        `json:"store_id"`
+	StallID   uint        `json:"stall_id"`
+	Items     interface{} `json:"items"`
+	Order     interface{} `json:"order"`
+	Action    string      `json:"action"`
+	Timestamp int64       `json:"timestamp"`
 }
 
-func PublishStallChange(action string, storeID, stallID uint, data interface{}) error {
+type StallDeviceAlertMessage struct {
+	DeviceID       uint   `json:"device_id"`
+	DeviceName     string `json:"device_name"`
+	DeviceNo       string `json:"device_no"`
+	StallID        uint   `json:"stall_id"`
+	StallName      string `json:"stall_name"`
+	StoreID        uint   `json:"store_id"`
+	AlertType      string `json:"alert_type"`
+	OfflineMinutes int    `json:"offline_minutes"`
+	BatteryLevel   int    `json:"battery_level"`
+	Timestamp      int64  `json:"timestamp"`
+}
+
+func FormatStallOrderTopic(stallID uint) string {
+	return fmt.Sprintf("stall_order_stall_%d", stallID)
+}
+
+func PublishStallChange(changeType string, storeID, stallID uint, stallNo, stallName string, status int, data interface{}) error {
 	msg := StallChangeMessage{
-		Action:    action,
-		StoreID:   storeID,
-		StallID:   stallID,
-		Data:      data,
-		Timestamp: GetCurrentTimestamp(),
+		ChangeType: changeType,
+		StoreID:    storeID,
+		StallID:    stallID,
+		StallNo:    stallNo,
+		StallName:  stallName,
+		Status:     status,
+		Data:       data,
+		Timestamp:  GetCurrentTimestamp(),
 	}
 	return Publish(TopicStallChanged, msg)
 }
 
-func PublishStallOrder(orderNo string, storeID, stallID uint, orderData interface{}, action string) error {
+func PublishStallOrder(orderNo string, storeID, stallID uint, items, order interface{}, action string) error {
 	msg := StallOrderMessage{
 		OrderNo:   orderNo,
 		StoreID:   storeID,
 		StallID:   stallID,
-		OrderData: orderData,
+		Items:     items,
+		Order:     order,
 		Action:    action,
 		Timestamp: GetCurrentTimestamp(),
 	}
-	return Publish(TopicStallOrder, msg)
+	return Publish(FormatStallOrderTopic(stallID), msg)
 }
 
-func PublishStallDeviceAlert(deviceID string, storeID, stallID uint, alertType string) error {
+func PublishStallDeviceAlert(deviceID uint, deviceName, deviceNo, stallName string, storeID, stallID uint, alertType string, offlineMinutes, batteryLevel int) error {
 	msg := StallDeviceAlertMessage{
-		DeviceID:  deviceID,
-		StallID:   stallID,
-		StoreID:   storeID,
-		AlertType: alertType,
-		Timestamp: GetCurrentTimestamp(),
+		DeviceID:       deviceID,
+		DeviceName:     deviceName,
+		DeviceNo:       deviceNo,
+		StallID:        stallID,
+		StallName:      stallName,
+		StoreID:        storeID,
+		AlertType:      alertType,
+		OfflineMinutes: offlineMinutes,
+		BatteryLevel:   batteryLevel,
+		Timestamp:      GetCurrentTimestamp(),
 	}
 	return Publish(TopicStallDeviceAlert, msg)
 }
