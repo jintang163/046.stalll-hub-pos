@@ -307,10 +307,10 @@ func (s *PromotionEngineService) CalculateBestCombination(storeID uint, amount d
 				discount = remainingAmount
 			}
 			result.Promotions = append(result.Promotions, dto.PromotionCalcResult{
-				PromotionID:    ap.promotion.ID,
-				PromotionName:  ap.promotion.Name,
-				PromotionType:  ap.promotion.Type,
-				DiscountAmount: discount,
+				PromotionID: ap.promotion.ID,
+				Name:        ap.promotion.Name,
+				Type:        ap.promotion.Type,
+				Discount:    discount,
 			})
 			totalDiscount = totalDiscount.Add(discount)
 			remainingAmount = remainingAmount.Sub(discount)
@@ -331,10 +331,10 @@ func (s *PromotionEngineService) CalculateBestCombination(storeID uint, amount d
 						couponDiscount = remainingAmount
 					}
 					result.Promotions = append(result.Promotions, dto.PromotionCalcResult{
-						PromotionID:    coupon.ID,
-						PromotionName:  coupon.Name,
-						PromotionType:  "coupon",
-						DiscountAmount: couponDiscount,
+						CouponID: mc.ID,
+						Name:     coupon.Name,
+						Type:     "coupon",
+						Discount: couponDiscount,
 					})
 					totalDiscount = totalDiscount.Add(couponDiscount)
 					remainingAmount = remainingAmount.Sub(couponDiscount)

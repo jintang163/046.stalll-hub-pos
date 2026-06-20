@@ -146,13 +146,14 @@ func (s *OrderService) Create(req *dto.CreateOrderRequest) (*dto.CreateOrderResp
 			req.MemberID,
 		)
 		if err == nil {
-			promotionDiscount = bestPromo.TotalDiscount
-			discountAmount = discountAmount.Add(promotionDiscount)
 			for _, p := range bestPromo.Promotions {
 				if p.CouponID > 0 {
 					couponAmount = couponAmount.Add(p.Discount)
+				} else {
+					promotionDiscount = promotionDiscount.Add(p.Discount)
 				}
 			}
+			discountAmount = discountAmount.Add(promotionDiscount)
 		}
 	}
 

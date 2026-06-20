@@ -74,6 +74,7 @@ type Coupon struct {
 	ApplicableType  string          `gorm:"size:20;default:all" json:"applicable_type"`
 	ApplicableIDs   string          `gorm:"size:1000" json:"applicable_ids"`
 	ExcludeProducts string          `gorm:"size:1000" json:"exclude_products"`
+	Priority        int             `gorm:"default:0" json:"priority"`
 	Stackable       bool            `gorm:"default:false" json:"stackable"`
 	Status          int             `gorm:"default:1" json:"status"`
 	Description     string          `gorm:"size:500" json:"description"`

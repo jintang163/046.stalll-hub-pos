@@ -183,6 +183,7 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 		miniCoupons := api.Group("/mini/coupons")
 		miniCoupons.Use(middleware.MemberAuth())
 		{
+			miniCoupons.GET("/claimable", promotionHandler.GetClaimableCoupons)
 			miniCoupons.GET("/available", promotionHandler.GetAvailableCoupons)
 			miniCoupons.GET("/my", promotionHandler.GetMyCoupons)
 			miniCoupons.POST("/claim", promotionHandler.ClaimCoupon)

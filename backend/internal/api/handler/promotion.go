@@ -125,16 +125,12 @@ func (h *PromotionHandler) CalculateBestCombination(c *gin.Context) {
 	}
 
 	memberID := middleware.GetMemberID(c)
-	couponID := uint(0)
-	couponIDStr := c.Query("coupon_id")
-	if couponIDStr != "" {
-		id, err := strconv.ParseUint(couponIDStr, 10, 32)
-		if err == nil {
-			couponID = uint(id)
-		}
+	if memberID == 0 {
+		memberID = req.MemberID
 	}
+	memberCouponID := req.MemberCouponID
 
-	result, err := h.promotionService.CalculateBestCombination(storeID, req.Amount, req.ProductIDs, couponID, memberID)
+	result, err := h.promotionService.CalculateBestCombination(storeID, req.Amount, req.ProductIDs, memberCouponID, memberID)
 	if err != nil {
 		middleware.Error(c, "计算优惠失败: "+err.Error())
 		return
@@ -228,6 +224,31 @@ func (h *PromotionHandler) GetAvailableCoupons(c *gin.Context) {
 	coupons, err := couponService.GetAvailableCoupons(memberID, storeID, amount, productIDs)
 	if err != nil {
 		middleware.Error(c, "获取可用优惠券失败: "+err.Error())
+		return
+	}
+
+	middleware.Success(c, coupons)
+}
+
+func (h *PromotionHandler) GetClaimableCoupons(c *gin.Context) {
+	storeID := uint(0)
+	storeIDStr := c.Query("store_id")
+	if storeIDStr != "" {
+		id, err := strconv.ParseUint(storeIDStr, 10, 32)
+		if err == nil {
+			storeID = uint(id)
+		}
+	}
+	if storeID == 0 {
+		storeID = middleware.GetStoreID(c)
+	}
+
+	memberID := middleware.GetMemberID(c)
+
+	couponService := service.NewCouponService()
+	coupons, err := couponService.GetClaimableCoupons(storeID, memberID)
+	if err != nil {
+		middleware.Error(c, "获取可领优惠券失败: "+err.Error())
 		return
 	}
 

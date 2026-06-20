@@ -411,6 +411,59 @@ func (s *CouponService) GetAvailableCoupons(memberID, storeID uint, amount decim
 	return list, nil
 }
 
+func (s *CouponService) GetClaimableCoupons(storeID, memberID uint) ([]dto.ClaimableCouponResponse, error) {
+	coupons, claimedCounts, err := s.couponRepo.GetClaimableCoupons(storeID, memberID)
+	if err != nil {
+		return nil, err
+	}
+
+	var list []dto.ClaimableCouponResponse
+	for _, c := range coupons {
+		claimedCount, _ := claimedCounts[c.ID]
+		remainingCount := c.TotalCount - c.UsedCount
+		if c.TotalCount == 0 {
+			remainingCount = -1
+		}
+		canClaim := true
+		if c.TotalCount > 0 && remainingCount <= 0 {
+			canClaim = false
+		}
+		if c.PerUserLimit > 0 && claimedCount >= c.PerUserLimit {
+			canClaim = false
+		}
+
+		list = append(list, dto.ClaimableCouponResponse{
+			ID:                c.ID,
+			StoreID:           c.StoreID,
+			RuleKey:           c.RuleKey,
+			Name:              c.Name,
+			Type:              c.Type,
+			Value:             c.Value,
+			MinAmount:         c.MinAmount,
+			DiscountRate:      c.DiscountRate,
+			MaxDiscount:       c.MaxDiscount,
+			TotalCount:        c.TotalCount,
+			UsedCount:         c.UsedCount,
+			PerUserLimit:      c.PerUserLimit,
+			ValidityType:      c.ValidityType,
+			ValidityDays:      c.ValidityDays,
+			StartTime:         c.StartTime,
+			EndTime:           c.EndTime,
+			ApplicableType:    c.ApplicableType,
+			ApplicableIDs:     s.parseIDs(c.ApplicableIDs),
+			Stackable:         c.Stackable,
+			Status:            c.Status,
+			Description:       c.Description,
+			ExchangeProductID: c.ExchangeProductID,
+			RemainingCount:    remainingCount,
+			ClaimedCount:      claimedCount,
+			CanClaim:          canClaim,
+		})
+	}
+
+	return list, nil
+}
+
 func (s *CouponService) calculateDiscount(coupon model.Coupon, amount decimal.Decimal) decimal.Decimal {
 	switch coupon.Type {
 	case "fixed":

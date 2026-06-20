@@ -317,6 +317,48 @@ func (r *CouponRepository) GetAvailableCoupons(memberID, storeID uint, amount fl
 	return validCoupons, nil
 }
 
+func (r *CouponRepository) GetClaimableCoupons(storeID, memberID uint) ([]model.Coupon, map[uint]int, error) {
+	var coupons []model.Coupon
+	now := time.Now()
+
+	db := database.DB.Model(&model.Coupon{}).
+		Where("status = 1").
+		Where("(start_time IS NULL OR start_time <= ?)", now).
+		Where("(end_time IS NULL OR end_time >= ?)", now)
+	if storeID > 0 {
+		db = db.Where("(store_id = ? OR store_id = 0)", storeID)
+	}
+	db = db.Order("priority DESC, id DESC")
+	if err := db.Find(&coupons).Error; err != nil {
+		return nil, nil, err
+	}
+
+	claimedCounts := make(map[uint]int)
+	if memberID > 0 {
+		couponIDs := make([]uint, 0, len(coupons))
+		for _, c := range coupons {
+			couponIDs = append(couponIDs, c.ID)
+		}
+		if len(couponIDs) > 0 {
+			type CountRow struct {
+				CouponID uint
+				Cnt      int64
+			}
+			var rows []CountRow
+			database.DB.Model(&model.MemberCoupon{}).
+				Select("coupon_id, COUNT(*) as cnt").
+				Where("member_id = ? AND coupon_id IN ?", memberID, couponIDs).
+				Group("coupon_id").
+				Scan(&rows)
+			for _, row := range rows {
+				claimedCounts[row.CouponID] = int(row.Cnt)
+			}
+		}
+	}
+
+	return coupons, claimedCounts, nil
+}
+
 func (r *CouponRepository) generateCouponCode() string {
 	b := make([]byte, 8)
 	rand.Read(b)

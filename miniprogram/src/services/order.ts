@@ -41,6 +41,11 @@ export interface OrderCreateDTO {
   table_no?: string
   remark?: string
   coupon_id?: number
+  member_coupon_id?: number
+  member_id?: number
+  order_type?: 'dine_in' | 'takeout' | 'delivery'
+  points_used?: number
+  source?: string
 }
 
 export const createOrder = (data: OrderCreateDTO) => {

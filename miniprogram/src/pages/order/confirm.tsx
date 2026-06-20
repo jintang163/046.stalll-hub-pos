@@ -123,7 +123,10 @@ const OrderConfirm: React.FC = () => {
         table_no: tableNo,
         remark: remark,
         coupon_id: couponId || undefined,
-        member_coupon_id: couponId || undefined
+        member_coupon_id: couponId || undefined,
+        member_id: user?.id,
+        order_type: 'dine_in',
+        source: 'miniprogram'
       }
 
       const order = await createOrder(orderData)

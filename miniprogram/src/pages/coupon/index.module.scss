@@ -19,6 +19,12 @@
     font-size: 24px;
     opacity: 0.9;
   }
+
+  .userHint {
+    margin-top: 12px;
+    font-size: 22px;
+    opacity: 0.85;
+  }
 }
 
 .tabs {
@@ -38,6 +44,17 @@
   font-size: 28px;
   color: #666;
   position: relative;
+
+  .badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 2px 10px;
+    background: #ff6b6b;
+    color: #fff;
+    border-radius: 12px;
+    font-size: 20px;
+    min-width: 20px;
+  }
 
   &.active {
     color: #667eea;
@@ -128,6 +145,21 @@
     opacity: 0.95;
   }
 
+  .couponTypeTag {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    background: rgba(255, 255, 255, 0.25);
+    padding: 2px 10px;
+    border-radius: 10px;
+    font-size: 20px;
+  }
+
+  .exchangeValue {
+    font-size: 40px;
+    margin-left: 8px;
+  }
+
   .couponRight {
     flex: 1;
     padding: 24px;
@@ -149,10 +181,16 @@
     line-height: 1.5;
   }
 
+  .couponHint {
+    font-size: 20px;
+    color: #ff9500;
+    margin-top: 6px;
+  }
+
   .couponMeta {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
+    gap: 4px;
     margin-top: 16px;
   }
 
@@ -164,6 +202,11 @@
   .couponStock {
     font-size: 20px;
     color: #ff6b6b;
+  }
+
+  .couponClaimed {
+    font-size: 20px;
+    color: #28a745;
   }
 
   .claimBtn {
@@ -238,6 +281,25 @@
     line-height: 1.6;
   }
 
+  .promoMetaRow {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 12px;
+    padding: 12px 0;
+    border-top: 1px dashed #eee;
+    border-bottom: 1px dashed #eee;
+
+    .promoApplicable {
+      font-size: 22px;
+      color: #666;
+    }
+
+    .promoPriority {
+      font-size: 22px;
+      color: #667eea;
+    }
+  }
+
   .promoTime {
     margin-top: 16px;
     font-size: 22px;
@@ -267,6 +329,12 @@
   .emptyText {
     font-size: 28px;
     color: #999;
+  }
+
+  .emptyHint {
+    margin-top: 12px;
+    font-size: 22px;
+    color: #bbb;
   }
 }
 

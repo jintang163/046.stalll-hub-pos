@@ -79,26 +79,57 @@ type PromotionResponse struct {
 }
 
 type PromotionCalcRequest struct {
-	StoreID    uint            `json:"store_id" binding:"required"`
-	Amount     decimal.Decimal `json:"amount" binding:"required,min=0"`
-	ProductIDs []uint          `json:"product_ids"`
+	StoreID         uint            `json:"store_id" binding:"required"`
+	Amount          decimal.Decimal `json:"amount" binding:"required,min=0"`
+	ProductIDs      []uint          `json:"product_ids"`
+	MemberCouponID  uint            `json:"member_coupon_id"`
+	MemberID        uint            `json:"member_id"`
 }
 
 type PromotionCalcResult struct {
-	PromotionID    uint            `json:"promotion_id"`
-	PromotionName  string          `json:"promotion_name"`
-	PromotionType  string          `json:"promotion_type"`
-	DiscountAmount decimal.Decimal `json:"discount_amount"`
+	PromotionID   uint            `json:"promotion_id"`
+	CouponID      uint            `json:"coupon_id"`
+	Name          string          `json:"name"`
+	Type          string          `json:"type"`
+	Discount      decimal.Decimal `json:"discount"`
 }
 
 type BestPromotionResponse struct {
-	Promotions     []PromotionCalcResult `json:"promotions"`
-	TotalDiscount  decimal.Decimal       `json:"total_discount"`
-	FinalAmount    decimal.Decimal       `json:"final_amount"`
+	Promotions    []PromotionCalcResult `json:"promotions"`
+	TotalDiscount decimal.Decimal       `json:"total_discount"`
+	FinalAmount   decimal.Decimal       `json:"final_amount"`
 }
 
 type MemberClaimCouponDTO struct {
 	CouponID uint `json:"coupon_id" binding:"required"`
+}
+
+type ClaimableCouponResponse struct {
+	ID              uint            `json:"id"`
+	StoreID         uint            `json:"store_id"`
+	RuleKey         string          `json:"rule_key"`
+	Name            string          `json:"name"`
+	Type            string          `json:"type"`
+	Value           decimal.Decimal `json:"value"`
+	MinAmount       decimal.Decimal `json:"min_amount"`
+	DiscountRate    decimal.Decimal `json:"discount_rate"`
+	MaxDiscount     decimal.Decimal `json:"max_discount"`
+	TotalCount      int             `json:"total_count"`
+	UsedCount       int             `json:"used_count"`
+	PerUserLimit    int             `json:"per_user_limit"`
+	ValidityType    string          `json:"validity_type"`
+	ValidityDays    int             `json:"validity_days"`
+	StartTime       *time.Time      `json:"start_time"`
+	EndTime         *time.Time      `json:"end_time"`
+	ApplicableType  string          `json:"applicable_type"`
+	ApplicableIDs   []uint          `json:"applicable_ids"`
+	Stackable       bool            `json:"stackable"`
+	Status          int             `json:"status"`
+	Description     string          `json:"description"`
+	ExchangeProductID uint          `json:"exchange_product_id"`
+	RemainingCount  int             `json:"remaining_count"`
+	ClaimedCount    int             `json:"claimed_count"`
+	CanClaim        bool            `json:"can_claim"`
 }
 
 type AvailableCouponQuery struct {
