@@ -10,7 +10,8 @@ export default defineAppConfig({
     'pages/coupon/index',
     'pages/store/select',
     'pages/table/scan',
-    'pages/table/reserve'
+    'pages/table/reserve',
+    'pages/voice/index'
   ],
   window: {
     backgroundTextStyle: 'light',
@@ -18,6 +19,12 @@ export default defineAppConfig({
     navigationBarTitleText: '大排档',
     navigationBarTextStyle: 'white',
     backgroundColor: '#f5f7fa'
+  },
+  plugins: {
+    'WechatSI': {
+      'version': '0.3.5',
+      'provider': 'wx069ba97219f66d99'
+    }
   },
   tabBar: {
     color: '#999',

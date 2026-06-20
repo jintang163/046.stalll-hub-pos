@@ -200,12 +200,17 @@ const Index: React.FC = () => {
       </View>
 
       <View className={styles.searchBar}>
-        <SearchBar
-          placeholder='搜索菜品'
-          value={searchKeyword}
-          onChange={v => setSearchKeyword(v)}
-          onSearch={() => {}}
-        />
+        <View className={styles.searchWrap}>
+          <SearchBar
+            placeholder='搜索菜品'
+            value={searchKeyword}
+            onChange={v => setSearchKeyword(v)}
+            onSearch={() => {}}
+          />
+        </View>
+        <View className={styles.voiceBtn} onClick={() => Taro.navigateTo({ url: '/pages/voice/index' })}>
+          <Text className={styles.voiceIcon}>🎤</Text>
+        </View>
       </View>
 
       <View className={styles.content}>

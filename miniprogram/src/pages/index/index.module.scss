@@ -45,6 +45,28 @@
 .searchBar {
   padding: 20rpx 24rpx;
   background: #fff;
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+
+  .searchWrap {
+    flex: 1;
+  }
+
+  .voiceBtn {
+    width: 72rpx;
+    height: 72rpx;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+
+    .voiceIcon {
+      font-size: 36rpx;
+    }
+  }
 }
 
 .content {

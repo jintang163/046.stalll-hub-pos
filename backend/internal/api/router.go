@@ -25,6 +25,7 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 	memberHandler := handler.NewMemberHandler()
 	couponHandler := handler.NewCouponHandler()
 	promotionHandler := handler.NewPromotionHandler()
+	voiceOrderHandler := handler.NewVoiceOrderHandler()
 	reportHandler := handler.NewReportHandler()
 	paymentHandler := handler.NewPaymentHandler()
 	tableHandler := handler.NewTableHandler()
@@ -178,6 +179,12 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 		{
 			miniPromotions.GET("/active", promotionHandler.GetActivePromotions)
 			miniPromotions.POST("/calculate", promotionHandler.CalculateBestCombination)
+		}
+
+		miniVoice := api.Group("/mini/voice")
+		miniVoice.Use(middleware.MemberAuth())
+		{
+			miniVoice.POST("/parse", voiceOrderHandler.ParseVoiceText)
 		}
 
 		miniCoupons := api.Group("/mini/coupons")
