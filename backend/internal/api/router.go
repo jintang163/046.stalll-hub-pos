@@ -34,6 +34,8 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 	rechargeActivityHandler := handler.NewRechargeActivityHandler()
 	stallHandler := handler.NewStallHandler()
 	queueHandler := handler.NewQueueHandler()
+	stockCheckHandler := handler.NewStockCheckHandler()
+	stockWarningHandler := handler.NewStockWarningHandler()
 
 	orderHandler := handler.NewOrderHandler(nil)
 
@@ -372,6 +374,24 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 		{
 			stallReports.GET("/daily", stallHandler.GetDailyReport)
 			stallReports.POST("/daily/generate", stallHandler.GenerateDailyReport)
+		}
+
+		stockChecks := api.Group("/stock-checks")
+		stockChecks.Use(middleware.JWTAuth())
+		{
+			stockChecks.POST("", stockCheckHandler.Create)
+			stockChecks.GET("", stockCheckHandler.List)
+			stockChecks.GET("/:id", stockCheckHandler.GetByID)
+			stockChecks.GET("/:id/items", stockCheckHandler.GetItems)
+			stockChecks.POST("/:id/upload", stockCheckHandler.UploadItems)
+			stockChecks.PUT("/items/:item_id", stockCheckHandler.UpdateItem)
+			stockChecks.POST("/:id/complete", stockCheckHandler.Complete)
+			stockChecks.GET("/:id/diff", stockCheckHandler.DiffReport)
+		}
+
+		stockWarnings := api.Group("/stock-warnings")
+		{
+			stockWarnings.GET("/dingtalk/test", stockWarningHandler.TestDingTalk)
 		}
 
 		queue2 := api.Group("/queue2")

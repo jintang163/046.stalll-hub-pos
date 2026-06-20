@@ -1,6 +1,10 @@
 package model
 
-import "github.com/shopspring/decimal"
+import (
+	"time"
+
+	"github.com/shopspring/decimal"
+)
 
 type Category struct {
 	BaseModel
@@ -89,4 +93,44 @@ type StockWarning struct {
 	Store      Store      `gorm:"foreignKey:StoreID" json:"store,omitempty"`
 	SKU        ProductSKU `gorm:"foreignKey:SKUID" json:"sku,omitempty"`
 	Product    Product    `gorm:"foreignKey:ProductID" json:"product,omitempty"`
+}
+
+type StockCheck struct {
+	BaseModel
+	StoreID       uint          `gorm:"not null;index" json:"store_id"`
+	CheckNo       string        `gorm:"size:50;unique;not null" json:"check_no"`
+	Title         string        `gorm:"size:100;not null" json:"title"`
+	CheckType     string        `gorm:"size:20;default:all" json:"check_type"`
+	Status        int           `gorm:"default:0" json:"status"`
+	TotalSKU      int           `gorm:"default:0" json:"total_sku"`
+	CheckedSKU    int           `gorm:"default:0" json:"checked_sku"`
+	TotalDiffQty  int           `gorm:"default:0" json:"total_diff_qty"`
+	TotalDiffAmount float64     `gorm:"type:decimal(12,2);default:0" json:"total_diff_amount"`
+	OperatorID    uint          `json:"operator_id"`
+	OperatorName  string        `gorm:"size:50" json:"operator_name"`
+	Remark        string        `gorm:"size:500" json:"remark"`
+	StartTime     *time.Time    `json:"start_time"`
+	EndTime       *time.Time    `json:"end_time"`
+	Store         Store         `gorm:"foreignKey:StoreID" json:"store,omitempty"`
+	Items         []StockCheckItem `gorm:"foreignKey:CheckID" json:"items,omitempty"`
+}
+
+type StockCheckItem struct {
+	BaseModel
+	CheckID      uint           `gorm:"not null;index" json:"check_id"`
+	ProductID    uint           `gorm:"not null;index" json:"product_id"`
+	SKUID        uint           `gorm:"not null;index" json:"sku_id"`
+	SKUCode      string         `gorm:"size:50;index" json:"sku_code"`
+	ProductName  string         `gorm:"size:100" json:"product_name"`
+	SpecName     string         `gorm:"size:50" json:"spec_name"`
+	CategoryID   uint           `json:"category_id"`
+	CategoryName string         `gorm:"size:50" json:"category_name"`
+	SystemStock  int            `gorm:"default:0" json:"system_stock"`
+	ActualStock  int            `gorm:"default:0" json:"actual_stock"`
+	DiffQty      int            `gorm:"default:0" json:"diff_qty"`
+	CostPrice    float64        `gorm:"type:decimal(10,2);default:0" json:"cost_price"`
+	DiffAmount   float64        `gorm:"type:decimal(10,2);default:0" json:"diff_amount"`
+	Status       int            `gorm:"default:0" json:"status"`
+	Remark       string         `gorm:"size:200" json:"remark"`
+	Check        StockCheck     `gorm:"foreignKey:CheckID" json:"check,omitempty"`
 }

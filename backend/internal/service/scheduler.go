@@ -11,6 +11,7 @@ type SchedulerService struct {
 	rechargeService  *RechargeActivityService
 	promotionService *PromotionEngineService
 	stallService     *StallService
+	dingTalk         *DingTalkService
 }
 
 func NewSchedulerService() *SchedulerService {
@@ -18,6 +19,7 @@ func NewSchedulerService() *SchedulerService {
 		rechargeService:  NewRechargeActivityService(),
 		promotionService: NewPromotionEngineService(),
 		stallService:     NewStallService(),
+		dingTalk:         NewDingTalkService(),
 	}
 }
 
@@ -28,6 +30,7 @@ func (s *SchedulerService) StartAllSchedulers() {
 	go s.runCouponStatusScheduler()
 	go s.runStallDeviceCheckScheduler()
 	go s.runStallDailyReportScheduler()
+	go s.runStockWarningScheduler()
 	log.Println("[Scheduler] All schedulers started")
 }
 
@@ -235,4 +238,64 @@ func (s *SchedulerService) runStallDailyReportScheduler() {
 func (s *SchedulerService) generateStallDailyReports() {
 	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
 	log.Printf("[Scheduler] Generating stall daily reports for %s", yesterday)
+}
+
+func (s *SchedulerService) runStockWarningScheduler() {
+	ticker := time.NewTicker(6 * time.Hour)
+	defer ticker.Stop()
+
+	s.checkStockWarnings()
+
+	for range ticker.C {
+		now := time.Now()
+		if now.Hour() == 9 || now.Hour() == 15 {
+			s.checkStockWarnings()
+		}
+	}
+}
+
+func (s *SchedulerService) checkStockWarnings() {
+	log.Println("[Scheduler] Checking stock warnings...")
+
+	var stores []model.Store
+	if err := database.DB.Where("status = 1").Find(&stores).Error; err != nil {
+		log.Printf("[Scheduler] Failed to find stores: %v", err)
+		return
+	}
+
+	for _, store := range stores {
+		var warnings []model.StockWarning
+
+		var skus []model.ProductSKU
+		if err := database.DB.Model(&model.ProductSKU{}).
+			Where("store_id = ? AND status = 1", store.ID).
+			Preload("Product").
+			Find(&skus).Error; err != nil {
+			log.Printf("[Scheduler] Failed to find SKUs for store %d: %v", store.ID, err)
+			continue
+		}
+
+		for _, sku := range skus {
+			threshold := sku.Product.StockWarningThreshold
+			if threshold <= 0 {
+				threshold = 10
+			}
+
+			if sku.Stock < threshold {
+				warnings = append(warnings, model.StockWarning{
+					StoreID:      store.ID,
+					SKUID:        sku.ID,
+					ProductID:    sku.ProductID,
+					CurrentStock: sku.Stock,
+					Threshold:    threshold,
+					Status:       1,
+				})
+			}
+		}
+
+		if len(warnings) > 0 {
+			log.Printf("[Scheduler] Store %s: %d SKUs below warning threshold", store.Name, len(warnings))
+			go s.dingTalk.SendStockWarning(warnings, store.Name)
+		}
+	}
 }

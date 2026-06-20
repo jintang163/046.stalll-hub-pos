@@ -375,6 +375,96 @@ class IPC {
         return 0
       }
     })
+
+    ipcMain.handle('db:saveStockCheck', (_, check) => {
+      try {
+        return db.saveStockCheck(check)
+      } catch (error) {
+        console.error('[IPC] db:saveStockCheck error:', error)
+        return { success: false, error: error.message }
+      }
+    })
+
+    ipcMain.handle('db:getStockCheckList', (_, status) => {
+      try {
+        return db.getStockCheckList(status)
+      } catch (error) {
+        console.error('[IPC] db:getStockCheckList error:', error)
+        return []
+      }
+    })
+
+    ipcMain.handle('db:getStockCheckById', (_, id) => {
+      try {
+        return db.getStockCheckById(id)
+      } catch (error) {
+        console.error('[IPC] db:getStockCheckById error:', error)
+        return null
+      }
+    })
+
+    ipcMain.handle('db:getStockCheckByNo', (_, checkNo) => {
+      try {
+        return db.getStockCheckByNo(checkNo)
+      } catch (error) {
+        console.error('[IPC] db:getStockCheckByNo error:', error)
+        return null
+      }
+    })
+
+    ipcMain.handle('db:updateStockCheckItem', (_, itemId, actualStock, remark) => {
+      try {
+        return db.updateStockCheckItem(itemId, actualStock, remark)
+      } catch (error) {
+        console.error('[IPC] db:updateStockCheckItem error:', error)
+        return null
+      }
+    })
+
+    ipcMain.handle('db:updateStockCheckItemBySku', (_, checkId, skuCode, actualStock, remark) => {
+      try {
+        return db.updateStockCheckItemBySku(checkId, skuCode, actualStock, remark)
+      } catch (error) {
+        console.error('[IPC] db:updateStockCheckItemBySku error:', error)
+        return null
+      }
+    })
+
+    ipcMain.handle('db:getStockCheckStats', (_, checkId) => {
+      try {
+        return db.getStockCheckStats(checkId)
+      } catch (error) {
+        console.error('[IPC] db:getStockCheckStats error:', error)
+        return null
+      }
+    })
+
+    ipcMain.handle('db:searchStockCheckItems', (_, checkId, keyword, status) => {
+      try {
+        return db.searchStockCheckItems(checkId, keyword, status)
+      } catch (error) {
+        console.error('[IPC] db:searchStockCheckItems error:', error)
+        return []
+      }
+    })
+
+    ipcMain.handle('db:getUnsyncedStockChecks', () => {
+      try {
+        return db.getUnsyncedStockChecks()
+      } catch (error) {
+        console.error('[IPC] db:getUnsyncedStockChecks error:', error)
+        return []
+      }
+    })
+
+    ipcMain.handle('db:markStockCheckSynced', (_, checkId) => {
+      try {
+        return db.markStockCheckSynced(checkId)
+      } catch (error) {
+        console.error('[IPC] db:markStockCheckSynced error:', error)
+        return null
+      }
+    })
   }
 
   static initNSQHandlers(ipcMain, nsq, store) {

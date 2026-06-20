@@ -32,6 +32,10 @@
           <el-icon><Bell /></el-icon>
           排队叫号
         </el-button>
+        <el-button @click="goStockCheck">
+          <el-icon><Goods /></el-icon>
+          库存盘点
+        </el-button>
         <el-button @click="goSettings">
           <el-icon><Setting /></el-icon>
           设置
@@ -304,7 +308,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
   Refresh, Download, List, Setting, Connection, Cpu,
-  RefreshRight, Top, DataAnalysis, Bell
+  RefreshRight, Top, DataAnalysis, Bell, Goods
 } from '@element-plus/icons-vue'
 import { useProductStore } from '@/store/product'
 import { useCartStore } from '@/store/cart'
@@ -440,6 +444,10 @@ const goStallReport = () => {
 
 const goQueueCall = () => {
   router.push('/queue-call')
+}
+
+const goStockCheck = () => {
+  router.push('/stock-check')
 }
 
 const goSettings = () => {

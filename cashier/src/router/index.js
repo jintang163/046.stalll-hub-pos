@@ -42,6 +42,12 @@ const routes = [
     name: 'QueueCall',
     component: () => import('@/views/queue-call/index.vue'),
     meta: { title: '排队叫号' }
+  },
+  {
+    path: '/stock-check',
+    name: 'StockCheck',
+    component: () => import('@/views/stock-check/index.vue'),
+    meta: { title: '库存盘点' }
   }
 ]
 

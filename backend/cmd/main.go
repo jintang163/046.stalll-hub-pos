@@ -67,6 +67,8 @@ func main() {
 		&model.StallSettlement{},
 		&model.StallSettlementItem{},
 		&model.StallDailyReport{},
+		&model.StockCheck{},
+		&model.StockCheckItem{},
 	)
 
 	initDefaultData()

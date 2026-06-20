@@ -15,6 +15,12 @@ type Config struct {
 	JWT      JWTConfig      `mapstructure:"jwt"`
 	Wechat   WechatConfig   `mapstructure:"wechat"`
 	Alipay   AlipayConfig   `mapstructure:"alipay"`
+	DingTalk DingTalkConfig `mapstructure:"dingtalk"`
+}
+
+type DingTalkConfig struct {
+	Webhook string `mapstructure:"webhook"`
+	Secret  string `mapstructure:"secret"`
 }
 
 type ServerConfig struct {

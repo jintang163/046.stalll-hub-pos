@@ -182,6 +182,49 @@ class SQLiteDatabase {
         end_time TEXT,
         error_message TEXT,
         created_at TEXT
+      )`,
+
+      `CREATE TABLE IF NOT EXISTS stock_checks (
+        id INTEGER PRIMARY KEY,
+        check_no TEXT UNIQUE NOT NULL,
+        title TEXT NOT NULL,
+        check_type TEXT DEFAULT 'all',
+        status INTEGER DEFAULT 0,
+        total_sku INTEGER DEFAULT 0,
+        checked_sku INTEGER DEFAULT 0,
+        total_diff_qty INTEGER DEFAULT 0,
+        total_diff_amount REAL DEFAULT 0,
+        operator_id INTEGER,
+        operator_name TEXT,
+        remark TEXT,
+        start_time TEXT,
+        end_time TEXT,
+        synced INTEGER DEFAULT 0,
+        sync_status INTEGER DEFAULT 0,
+        created_at TEXT,
+        updated_at TEXT
+      )`,
+
+      `CREATE TABLE IF NOT EXISTS stock_check_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        check_id INTEGER NOT NULL,
+        check_no TEXT NOT NULL,
+        product_id INTEGER NOT NULL,
+        sku_id INTEGER NOT NULL,
+        sku_code TEXT,
+        product_name TEXT,
+        spec_name TEXT,
+        category_id INTEGER,
+        category_name TEXT,
+        system_stock INTEGER DEFAULT 0,
+        actual_stock INTEGER DEFAULT 0,
+        diff_qty INTEGER DEFAULT 0,
+        cost_price REAL DEFAULT 0,
+        diff_amount REAL DEFAULT 0,
+        status INTEGER DEFAULT 0,
+        remark TEXT,
+        created_at TEXT,
+        updated_at TEXT
       )`
     ]
 
@@ -951,6 +994,191 @@ class SQLiteDatabase {
   getPendingOrderCount() {
     const row = this.db.prepare(`SELECT COUNT(*) as cnt FROM orders WHERE (sync_status = 0 OR synced = 0)`).get()
     return row?.cnt || 0
+  }
+
+  saveStockCheck(check) {
+    const now = new Date().toISOString()
+    const tx = this.db.transaction(() => {
+      const stmt = this.db.prepare(`
+        INSERT OR REPLACE INTO stock_checks
+        (id, check_no, title, check_type, status, total_sku, checked_sku,
+         total_diff_qty, total_diff_amount, operator_id, operator_name, remark,
+         start_time, end_time, synced, sync_status, created_at, updated_at)
+        VALUES (@id, @check_no, @title, @check_type, @status, @total_sku, @checked_sku,
+                @total_diff_qty, @total_diff_amount, @operator_id, @operator_name, @remark,
+                @start_time, @end_time, @synced, @sync_status, @created_at, @updated_at)
+      `)
+
+      const insertItem = this.db.prepare(`
+        INSERT OR REPLACE INTO stock_check_items
+        (check_id, check_no, product_id, sku_id, sku_code, product_name, spec_name,
+         category_id, category_name, system_stock, actual_stock, diff_qty,
+         cost_price, diff_amount, status, remark, created_at, updated_at)
+        VALUES (@check_id, @check_no, @product_id, @sku_id, @sku_code, @product_name, @spec_name,
+                @category_id, @category_name, @system_stock, @actual_stock, @diff_qty,
+                @cost_price, @diff_amount, @status, @remark, @created_at, @updated_at)
+      `)
+
+      const deleteItems = this.db.prepare(`DELETE FROM stock_check_items WHERE check_id = ?`)
+
+      const id = check.id || null
+      stmt.run({
+        id: id,
+        check_no: check.check_no || check.checkNo,
+        title: check.title || '',
+        check_type: check.check_type || check.checkType || 'all',
+        status: check.status ?? 0,
+        total_sku: check.total_sku ?? check.totalSku ?? 0,
+        checked_sku: check.checked_sku ?? check.checkedSku ?? 0,
+        total_diff_qty: check.total_diff_qty ?? check.totalDiffQty ?? 0,
+        total_diff_amount: check.total_diff_amount ?? check.totalDiffAmount ?? 0,
+        operator_id: check.operator_id ?? check.operatorId ?? null,
+        operator_name: check.operator_name ?? check.operatorName ?? '',
+        remark: check.remark ?? '',
+        start_time: check.start_time ?? check.startTime ?? now,
+        end_time: check.end_time ?? check.endTime ?? null,
+        synced: check.synced ?? 0,
+        sync_status: check.sync_status ?? check.syncStatus ?? 0,
+        created_at: check.created_at ?? now,
+        updated_at: now,
+      })
+
+      const checkId = check.id || this.db.prepare('SELECT last_insert_rowid() as id').get().id
+      if (check.items && check.items.length > 0) {
+        deleteItems.run(checkId)
+        check.items.forEach(item => {
+          insertItem.run({
+            check_id: checkId,
+            check_no: check.check_no || check.checkNo,
+            product_id: item.product_id ?? item.productId ?? 0,
+            sku_id: item.sku_id ?? item.skuId ?? 0,
+            sku_code: item.sku_code ?? item.skuCode ?? '',
+            product_name: item.product_name ?? item.productName ?? '',
+            spec_name: item.spec_name ?? item.specName ?? '',
+            category_id: item.category_id ?? item.categoryId ?? null,
+            category_name: item.category_name ?? item.categoryName ?? '',
+            system_stock: item.system_stock ?? item.systemStock ?? 0,
+            actual_stock: item.actual_stock ?? item.actualStock ?? 0,
+            diff_qty: item.diff_qty ?? item.diffQty ?? (item.actual_stock ?? item.actualStock ?? 0) - (item.system_stock ?? item.systemStock ?? 0),
+            cost_price: item.cost_price ?? item.costPrice ?? 0,
+            diff_amount: item.diff_amount ?? item.diffAmount ?? 0,
+            status: item.status ?? 0,
+            remark: item.remark ?? '',
+            created_at: item.created_at ?? now,
+            updated_at: now,
+          })
+        })
+      }
+    })
+
+    tx()
+    return { success: true, check_no: check.check_no || check.checkNo }
+  }
+
+  getStockCheckList(status) {
+    let sql = `SELECT * FROM stock_checks ORDER BY id DESC`
+    const params = []
+    if (status !== undefined && status !== null && status >= 0) {
+      sql = `SELECT * FROM stock_checks WHERE status = ? ORDER BY id DESC`
+      params.push(status)
+    }
+    return this.db.prepare(sql).all(...params)
+  }
+
+  getStockCheckById(id) {
+    const check = this.db.prepare(`SELECT * FROM stock_checks WHERE id = ?`).get(id)
+    if (check) {
+      check.items = this.db.prepare(`SELECT * FROM stock_check_items WHERE check_id = ? ORDER BY id`).all(id)
+    }
+    return check
+  }
+
+  getStockCheckByNo(checkNo) {
+    const check = this.db.prepare(`SELECT * FROM stock_checks WHERE check_no = ?`).get(checkNo)
+    if (check) {
+      check.items = this.db.prepare(`SELECT * FROM stock_check_items WHERE check_id = ? ORDER BY id`).all(check.id)
+    }
+    return check
+  }
+
+  updateStockCheckItem(itemId, actualStock, remark) {
+    const item = this.db.prepare(`SELECT * FROM stock_check_items WHERE id = ?`).get(itemId)
+    if (!item) return null
+
+    const diffQty = actualStock - item.system_stock
+    const diffAmount = diffQty * item.cost_price
+    const now = new Date().toISOString()
+
+    this.db.prepare(`
+      UPDATE stock_check_items
+      SET actual_stock = ?, diff_qty = ?, diff_amount = ?, status = 1, remark = ?, updated_at = ?
+      WHERE id = ?
+    `).run(actualStock, diffQty, diffAmount, remark || item.remark, now, itemId)
+
+    const checkId = item.check_id
+    const stats = this.db.prepare(`
+      SELECT 
+        COUNT(*) as total,
+        SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) as checked,
+        COALESCE(SUM(CASE WHEN status = 1 THEN diff_qty ELSE 0 END), 0) as total_diff_qty,
+        COALESCE(SUM(CASE WHEN status = 1 THEN diff_amount ELSE 0 END), 0) as total_diff_amount
+      FROM stock_check_items WHERE check_id = ?
+    `).get(checkId)
+
+    this.db.prepare(`
+      UPDATE stock_checks
+      SET total_sku = ?, checked_sku = ?, total_diff_qty = ?, total_diff_amount = ?, updated_at = ?
+      WHERE id = ?
+    `).run(stats.total, stats.checked, stats.total_diff_qty, stats.total_diff_amount, now, checkId)
+
+    return this.getStockCheckById(checkId)
+  }
+
+  updateStockCheckItemBySku(checkId, skuCode, actualStock, remark) {
+    const item = this.db.prepare(`SELECT * FROM stock_check_items WHERE check_id = ? AND sku_code = ?`).get(checkId, skuCode)
+    if (!item) return null
+    return this.updateStockCheckItem(item.id, actualStock, remark)
+  }
+
+  getUnsyncedStockChecks() {
+    return this.db.prepare(`SELECT * FROM stock_checks WHERE sync_status = 0 OR synced = 0`).all()
+  }
+
+  markStockCheckSynced(checkId) {
+    const now = new Date().toISOString()
+    return this.db.prepare(`UPDATE stock_checks SET synced = 1, sync_status = 1, updated_at = ? WHERE id = ?`).run(now, checkId)
+  }
+
+  getStockCheckStats(checkId) {
+    return this.db.prepare(`
+      SELECT 
+        COUNT(*) as total_sku,
+        SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) as checked_sku,
+        SUM(CASE WHEN status = 1 AND diff_qty = 0 THEN 1 ELSE 0 END) as normal_count,
+        SUM(CASE WHEN status = 1 AND diff_qty > 0 THEN 1 ELSE 0 END) as profit_count,
+        SUM(CASE WHEN status = 1 AND diff_qty < 0 THEN 1 ELSE 0 END) as loss_count,
+        COALESCE(SUM(CASE WHEN status = 1 THEN diff_qty ELSE 0 END), 0) as total_diff_qty,
+        COALESCE(SUM(CASE WHEN status = 1 THEN diff_amount ELSE 0 END), 0) as total_diff_amount
+      FROM stock_check_items WHERE check_id = ?
+    `).get(checkId)
+  }
+
+  searchStockCheckItems(checkId, keyword, status) {
+    let sql = `SELECT * FROM stock_check_items WHERE check_id = ?`
+    const params = [checkId]
+
+    if (keyword) {
+      sql += ` AND (sku_code LIKE ? OR product_name LIKE ? OR spec_name LIKE ?)`
+      const kw = `%${keyword}%`
+      params.push(kw, kw, kw)
+    }
+    if (status !== undefined && status !== null && status >= 0) {
+      sql += ` AND status = ?`
+      params.push(status)
+    }
+
+    sql += ` ORDER BY id LIMIT 200`
+    return this.db.prepare(sql).all(...params)
   }
 
   close() {
