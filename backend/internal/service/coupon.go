@@ -49,19 +49,20 @@ func (s *CouponService) CreateCoupon(storeID uint, req *dto.CouponCreateDTO) (*m
 		Name:            req.Name,
 		Type:            req.Type,
 		Value:           req.Value,
-		MinConsume:      req.MinAmount,
+		MinAmount:       req.MinAmount,
 		DiscountRate:    req.Value,
 		MaxDiscount:     req.MaxDiscount,
 		TotalCount:      req.TotalCount,
 		UsedCount:       0,
 		PerUserLimit:    req.PerUserLimit,
-		ValidType:       req.ValidityType,
-		ValidDays:       req.ValidityDays,
+		ValidityType:    req.ValidityType,
+		ValidityDays:    req.ValidityDays,
 		StartTime:       req.StartTime,
 		EndTime:         req.EndTime,
-		ApplyScope:      req.ApplicableType,
-		ProductIDs:      applicableIDs,
+		ApplicableType:  req.ApplicableType,
+		ApplicableIDs:   applicableIDs,
 		ExcludeProducts: excludeProducts,
+		Stackable:       req.Stackable,
 		Status:          req.Status,
 		Description:     req.Description,
 	}
@@ -80,6 +81,26 @@ func (s *CouponService) CreateCoupon(storeID uint, req *dto.CouponCreateDTO) (*m
 	}
 
 	return s.couponRepo.GetByID(coupon.ID)
+}
+
+func (s *CouponService) ClaimCoupon(memberID, couponID uint) (*dto.MemberCouponResponse, error) {
+	mc, err := s.couponRepo.ClaimCoupon(memberID, couponID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.MemberCouponResponse{
+		ID:        mc.ID,
+		MemberID:  mc.MemberID,
+		CouponID:  mc.CouponID,
+		Coupon:    *s.convertToCouponResponse(&mc.Coupon),
+		Code:      mc.Code,
+		Status:    mc.Status,
+		UsedAt:    mc.UsedAt,
+		ExpireAt:  mc.ExpireAt,
+		OrderID:   mc.OrderID,
+		CreatedAt: mc.CreatedAt,
+	}, nil
 }
 
 func (s *CouponService) GetCoupon(id uint) (*dto.CouponResponse, error) {
@@ -109,7 +130,7 @@ func (s *CouponService) UpdateCoupon(id uint, req *dto.CouponUpdateDTO) (*dto.Co
 		}
 	}
 	if !req.MinAmount.IsZero() {
-		coupon.MinConsume = req.MinAmount
+		coupon.MinAmount = req.MinAmount
 	}
 	if !req.MaxDiscount.IsZero() {
 		coupon.MaxDiscount = req.MaxDiscount
@@ -121,10 +142,10 @@ func (s *CouponService) UpdateCoupon(id uint, req *dto.CouponUpdateDTO) (*dto.Co
 		coupon.PerUserLimit = req.PerUserLimit
 	}
 	if req.ValidityType != "" {
-		coupon.ValidType = req.ValidityType
+		coupon.ValidityType = req.ValidityType
 	}
 	if req.ValidityDays > 0 {
-		coupon.ValidDays = req.ValidityDays
+		coupon.ValidityDays = req.ValidityDays
 	}
 	if req.StartTime != nil {
 		coupon.StartTime = req.StartTime
@@ -133,14 +154,14 @@ func (s *CouponService) UpdateCoupon(id uint, req *dto.CouponUpdateDTO) (*dto.Co
 		coupon.EndTime = req.EndTime
 	}
 	if req.ApplicableType != "" {
-		coupon.ApplyScope = req.ApplicableType
+		coupon.ApplicableType = req.ApplicableType
 	}
 	if len(req.ApplicableIDs) > 0 {
 		ids := make([]string, len(req.ApplicableIDs))
 		for i, id := range req.ApplicableIDs {
 			ids[i] = fmt.Sprintf("%d", id)
 		}
-		coupon.ProductIDs = strings.Join(ids, ",")
+		coupon.ApplicableIDs = strings.Join(ids, ",")
 	}
 	if len(req.ExcludeProducts) > 0 {
 		ids := make([]string, len(req.ExcludeProducts))
@@ -150,6 +171,7 @@ func (s *CouponService) UpdateCoupon(id uint, req *dto.CouponUpdateDTO) (*dto.Co
 		coupon.ExcludeProducts = strings.Join(ids, ",")
 	}
 	if req.Stackable != nil {
+		coupon.Stackable = *req.Stackable
 	}
 	coupon.Description = req.Description
 	if req.Status != 0 {
@@ -267,15 +289,15 @@ func (s *CouponService) VerifyCoupon(req *dto.VerifyCouponDTO) (*dto.VerifyCoupo
 		}, nil
 	}
 
-	if req.Amount.LessThan(coupon.MinConsume) {
+	if req.Amount.LessThan(coupon.MinAmount) {
 		return &dto.VerifyCouponResponse{
 			Valid:   false,
-			Message: fmt.Sprintf("minimum consumption %s required", coupon.MinConsume.String()),
+			Message: fmt.Sprintf("minimum consumption %s required", coupon.MinAmount.String()),
 		}, nil
 	}
 
-	if coupon.ApplyScope != "all" && len(req.ProductIDs) > 0 {
-		applicableIDs := s.parseIDs(coupon.ProductIDs)
+	if coupon.ApplicableType != "all" && len(req.ProductIDs) > 0 {
+		applicableIDs := s.parseIDs(coupon.ApplicableIDs)
 		if len(applicableIDs) > 0 {
 			found := false
 			for _, pid := range req.ProductIDs {
@@ -420,7 +442,7 @@ func (s *CouponService) parseIDs(idsStr string) []uint {
 }
 
 func (s *CouponService) convertToCouponResponse(c *model.Coupon) *dto.CouponResponse {
-	applicableIDs := s.parseIDs(c.ProductIDs)
+	applicableIDs := s.parseIDs(c.ApplicableIDs)
 	excludeProducts := s.parseIDs(c.ExcludeProducts)
 
 	return &dto.CouponResponse{
@@ -429,18 +451,19 @@ func (s *CouponService) convertToCouponResponse(c *model.Coupon) *dto.CouponResp
 		Name:            c.Name,
 		Type:            c.Type,
 		Value:           c.Value,
-		MinAmount:       c.MinConsume,
+		MinAmount:       c.MinAmount,
 		MaxDiscount:     c.MaxDiscount,
 		TotalCount:      c.TotalCount,
 		UsedCount:       c.UsedCount,
 		PerUserLimit:    c.PerUserLimit,
-		ValidityType:    c.ValidType,
-		ValidityDays:    c.ValidDays,
+		ValidityType:    c.ValidityType,
+		ValidityDays:    c.ValidityDays,
 		StartTime:       c.StartTime,
 		EndTime:         c.EndTime,
-		ApplicableType:  c.ApplyScope,
+		ApplicableType:  c.ApplicableType,
 		ApplicableIDs:   applicableIDs,
 		ExcludeProducts: excludeProducts,
+		Stackable:       c.Stackable,
 		Description:     c.Description,
 		Status:          c.Status,
 		CreatedAt:       c.CreatedAt,

@@ -14,6 +14,7 @@ type Claims struct {
 	UserID   uint   `json:"user_id"`
 	Username string `json:"username"`
 	StoreID  uint   `json:"store_id"`
+	MemberID uint   `json:"member_id"`
 	Role     string `json:"role"`
 	jwt.RegisteredClaims
 }
@@ -53,6 +54,7 @@ func JWTAuth() gin.HandlerFunc {
 		c.Set("user_id", claims.UserID)
 		c.Set("username", claims.Username)
 		c.Set("store_id", claims.StoreID)
+		c.Set("member_id", claims.MemberID)
 		c.Set("role", claims.Role)
 		c.Next()
 	}
@@ -65,6 +67,23 @@ func GenerateToken(userID uint, username string, storeID uint, role string) (str
 		Username: username,
 		StoreID:  storeID,
 		Role:     role,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			Issuer:    "stalll-hub-pos",
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(config.AppConfig.JWT.Secret))
+}
+
+func GenerateMemberToken(memberID uint, storeID uint) (string, error) {
+	expirationTime := time.Now().Add(time.Duration(config.AppConfig.JWT.ExpireHours*24*30) * time.Hour)
+	claims := &Claims{
+		MemberID: memberID,
+		StoreID:  storeID,
+		Role:     "member",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -115,4 +134,40 @@ func GetRole(c *gin.Context) string {
 		return ""
 	}
 	return role.(string)
+}
+
+func GetMemberID(c *gin.Context) uint {
+	memberID, exists := c.Get("member_id")
+	if !exists {
+		return 0
+	}
+	return memberID.(uint)
+}
+
+func MemberAuth() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.Next()
+			return
+		}
+
+		parts := strings.SplitN(authHeader, " ", 2)
+		if !(len(parts) == 2 && parts[0] == "Bearer") {
+			c.Next()
+			return
+		}
+
+		claims, err := ParseToken(parts[1])
+		if err != nil {
+			c.Next()
+			return
+		}
+
+		c.Set("member_id", claims.MemberID)
+		c.Set("store_id", claims.StoreID)
+		c.Set("user_id", claims.UserID)
+		c.Set("role", claims.Role)
+		c.Next()
+	}
 }

@@ -4,7 +4,7 @@ import Taro from '@tarojs/taro'
 import { Loading, Dialog, Cell, Button } from '@nutui/nutui-react-taro'
 import { useCartStore } from '../../store/cart'
 import { useAppStore } from '../../store/app'
-import { getAvailableCoupons, MemberCoupon } from '../../services/coupon'
+import { getAvailableCoupons, MemberCoupon, calculateBestCombination, BestPromotionResponse } from '../../services/coupon'
 import { createOrder, getPaymentParams } from '../../services/order'
 import type { OrderCreateDTO, OrderItem } from '../../services/order'
 import { isLogin, loginByCode } from '../../services/auth'
@@ -29,18 +29,36 @@ const OrderConfirm: React.FC = () => {
   const [showPayDialog, setShowPayDialog] = useState(false)
   const [payLoading, setPayLoading] = useState(false)
   const [createdOrder, setCreatedOrder] = useState<any>(null)
+  const [bestPromo, setBestPromo] = useState<BestPromotionResponse | null>(null)
 
-  const actualTotal = Math.max(0, total - couponDiscount)
+  const actualTotal = bestPromo ? bestPromo.final_amount : Math.max(0, total - couponDiscount)
+
+  const productIds = Array.from(new Set(items.map(item => item.product_id)))
 
   useEffect(() => {
+    loadPromotions()
     loadCoupons()
-  }, [total])
+  }, [total, productIds.join(',')])
+
+  const loadPromotions = async () => {
+    if (!currentStore || productIds.length === 0) return
+    try {
+      const result = await calculateBestCombination({
+        store_id: currentStore.id,
+        amount: total,
+        product_ids: productIds,
+        member_coupon_id: couponId || undefined,
+        member_id: user?.id
+      })
+      setBestPromo(result)
+    } catch {}
+  }
 
   const loadCoupons = async () => {
     if (!isLogin()) return
     setLoading(true)
     try {
-      const list = await getAvailableCoupons(total)
+      const list = await getAvailableCoupons(total, productIds)
       setCoupons(list)
     } catch {}
     finally {
@@ -52,12 +70,15 @@ const OrderConfirm: React.FC = () => {
     if (!coupon) {
       setCoupon(null, 0)
     } else {
-      const discount = coupon.coupon.type === 1 
-        ? coupon.coupon.value 
-        : (total * coupon.coupon.value / 100)
-      setCoupon(coupon.id, Math.min(discount, total))
+      const discount = coupon.coupon.type === 'fixed'
+        ? Number(coupon.coupon.value)
+        : coupon.coupon.type === 'percentage'
+          ? Math.min(Number(total) * Number(coupon.coupon.value) / 10, Number(coupon.coupon.max_discount) || Infinity)
+          : 0
+      setCoupon(coupon.id, Math.min(discount, Number(total)))
     }
     setShowCouponDialog(false)
+    setTimeout(loadPromotions, 100)
   }
 
   const handleSubmit = async () => {
@@ -101,7 +122,8 @@ const OrderConfirm: React.FC = () => {
         items: orderItems,
         table_no: tableNo,
         remark: remark,
-        coupon_id: couponId || undefined
+        coupon_id: couponId || undefined,
+        member_coupon_id: couponId || undefined
       }
 
       const order = await createOrder(orderData)
@@ -133,7 +155,7 @@ const OrderConfirm: React.FC = () => {
     setPayLoading(true)
     try {
       const params = await getPaymentParams(createdOrder.order_no)
-      
+
       await Taro.requestPayment({
         timeStamp: params.timeStamp,
         nonceStr: params.nonceStr,
@@ -160,6 +182,15 @@ const OrderConfirm: React.FC = () => {
   }
 
   const selectedCoupon = coupons.find(c => c.id === couponId)
+
+  const getCouponTypeLabel = (type: string) => {
+    const map: Record<string, string> = {
+      fixed: '满减券',
+      percentage: '折扣券',
+      exchange: '兑换券'
+    }
+    return map[type] || type
+  }
 
   return (
     <View className={styles.container}>
@@ -233,6 +264,23 @@ const OrderConfirm: React.FC = () => {
           )}
         </View>
 
+        {bestPromo && bestPromo.promotions.length > 0 && (
+          <View className={styles.section}>
+            <View className={styles.sectionHeader}>
+              <Text className={styles.sectionIcon}>🏷️</Text>
+              <Text className={styles.sectionTitle}>已享优惠</Text>
+            </View>
+            {bestPromo.promotions.map((p, idx) => (
+              <Cell
+                key={idx}
+                title={p.name}
+                description={p.promotion_id ? '营销活动' : p.coupon_id ? '优惠券' : ''}
+                extra={`-¥${Number(p.discount).toFixed(2)}`}
+              />
+            ))}
+          </View>
+        )}
+
         {remark && (
           <View className={styles.section}>
             <View className={styles.sectionHeader}>
@@ -249,10 +297,13 @@ const OrderConfirm: React.FC = () => {
             <Text className={styles.sectionTitle}>费用明细</Text>
           </View>
           <Cell title='商品合计' extra={`¥${total.toFixed(2)}`} />
-          {couponDiscount > 0 && (
+          {bestPromo && bestPromo.total_discount > 0 && (
+            <Cell title='活动优惠' extra={`-¥${Number(bestPromo.total_discount).toFixed(2)}`} />
+          )}
+          {!bestPromo && couponDiscount > 0 && (
             <Cell title='优惠券抵扣' extra={`-¥${couponDiscount.toFixed(2)}`} />
           )}
-          <Cell title='实付金额' extra={`¥${actualTotal.toFixed(2)}`} />
+          <Cell title='实付金额' extra={`¥${Number(actualTotal).toFixed(2)}`} />
         </View>
       </ScrollView>
 
@@ -260,7 +311,7 @@ const OrderConfirm: React.FC = () => {
         <View className={styles.footerTotal}>
           <Text className={styles.totalLabel}>实付：</Text>
           <Text className={styles.totalSymbol}>¥</Text>
-          <Text className={styles.totalValue}>{actualTotal.toFixed(2)}</Text>
+          <Text className={styles.totalValue}>{Number(actualTotal).toFixed(2)}</Text>
         </View>
         <View
           className={`${styles.submitBtn} ${submitting ? styles.btnDisabled : ''}`}
@@ -295,16 +346,17 @@ const OrderConfirm: React.FC = () => {
               >
                 <View className={styles.couponLeft}>
                   <Text className={styles.couponValue}>
-                    {coupon.coupon.type === 1 ? '¥' : ''}
+                    {coupon.coupon.type === 'fixed' ? '¥' : ''}
                     {coupon.coupon.value}
-                    {coupon.coupon.type === 2 ? '折' : ''}
+                    {coupon.coupon.type === 'percentage' ? '折' : ''}
                   </Text>
                   <Text className={styles.couponCondition}>满{coupon.coupon.min_amount}可用</Text>
                 </View>
                 <View className={styles.couponInfo}>
                   <Text className={styles.couponName}>{coupon.coupon.name}</Text>
+                  <Text className={styles.couponType}>{getCouponTypeLabel(coupon.coupon.type)}</Text>
                   <Text className={styles.couponTime}>
-                    {coupon.coupon.start_time} 至 {coupon.coupon.end_time}
+                    {coupon.expire_at ? `有效期至 ${coupon.expire_at.slice(0, 10)}` : '长期有效'}
                   </Text>
                 </View>
               </View>
@@ -316,7 +368,7 @@ const OrderConfirm: React.FC = () => {
       <Dialog
         visible={showPayDialog}
         title='确认支付'
-        content={`需支付 ¥${actualTotal.toFixed(2)}`}
+        content={`需支付 ¥${Number(actualTotal).toFixed(2)}`}
         okText='立即支付'
         cancelText='稍后支付'
         onOk={handlePay}

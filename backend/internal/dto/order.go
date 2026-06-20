@@ -17,15 +17,16 @@ type OrderItemDTO struct {
 }
 
 type CreateOrderRequest struct {
-	StoreID      uint            `json:"store_id" binding:"required"`
-	MemberID     uint            `json:"member_id"`
-	TableNo      string          `json:"table_no"`
-	OrderType    string          `json:"order_type" binding:"required,oneof=dine_in takeout delivery"`
-	Items        []OrderItemDTO  `json:"items" binding:"required,min=1"`
-	CouponID     uint            `json:"coupon_id"`
-	PointsUsed   int             `json:"points_used"`
-	Remark       string          `json:"remark"`
-	Source       string          `json:"source"`
+	StoreID        uint            `json:"store_id" binding:"required"`
+	MemberID       uint            `json:"member_id"`
+	TableNo        string          `json:"table_no"`
+	OrderType      string          `json:"order_type" binding:"required,oneof=dine_in takeout delivery"`
+	Items          []OrderItemDTO  `json:"items" binding:"required,min=1"`
+	CouponID       uint            `json:"coupon_id"`
+	MemberCouponID uint            `json:"member_coupon_id"`
+	PointsUsed     int             `json:"points_used"`
+	Remark         string          `json:"remark"`
+	Source         string          `json:"source"`
 }
 
 type CreateOrderResponse struct {
@@ -88,6 +89,7 @@ type OrderDetailResponse struct {
 	PointsEarned    int                   `json:"points_earned"`
 	PointsUsed      int                   `json:"points_used"`
 	CouponID        uint                  `json:"coupon_id"`
+	MemberCouponID  uint                  `json:"member_coupon_id"`
 	Remark          string                `json:"remark"`
 	Source          string                `json:"source"`
 	Items           []OrderItemDetail     `json:"items"`

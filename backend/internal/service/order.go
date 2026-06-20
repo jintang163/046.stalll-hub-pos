@@ -24,6 +24,8 @@ type OrderService struct {
 	productRepo      *repository.ProductRepository
 	memberRepo       *repository.MemberRepository
 	memberLevelRepo  *repository.MemberLevelRepository
+	couponRepo       *repository.CouponRepository
+	promotionEngine  *PromotionEngineService
 	pointsEngine     *PointsEngineService
 	nsqProducer      *nsq.Producer
 	cfg              *config.Config
@@ -35,6 +37,8 @@ func NewOrderService() *OrderService {
 		productRepo:      repository.NewProductRepository(),
 		memberRepo:       repository.NewMemberRepository(nil),
 		memberLevelRepo:  repository.NewMemberLevelRepository(nil),
+		couponRepo:       repository.NewCouponRepository(),
+		promotionEngine:  NewPromotionEngineService(),
 		pointsEngine:     NewPointsEngineService(),
 		nsqProducer:      nsq.Producer,
 		cfg:              config.AppConfig,
@@ -106,9 +110,19 @@ func (s *OrderService) Create(req *dto.CreateOrderRequest) (*dto.CreateOrderResp
 	discountAmount := decimal.Zero
 	couponAmount := decimal.Zero
 	levelDiscountAmount := decimal.Zero
+	promotionDiscount := decimal.Zero
 	pointsUsed := req.PointsUsed
 	var pointsEarned int
 	levelPointsRate := decimal.NewFromInt(1)
+
+	productIDs := make([]uint, 0, len(req.Items))
+	productIDSet := make(map[uint]bool)
+	for _, item := range req.Items {
+		if !productIDSet[item.ProductID] {
+			productIDs = append(productIDs, item.ProductID)
+			productIDSet[item.ProductID] = true
+		}
+	}
 
 	if req.MemberID > 0 {
 		member, err := s.memberRepo.GetByID(req.MemberID)
@@ -119,6 +133,25 @@ func (s *OrderService) Create(req *dto.CreateOrderRequest) (*dto.CreateOrderResp
 					decimal.NewFromInt(100).Sub(member.Level.DiscountRate).Div(decimal.NewFromInt(100)),
 				)
 				discountAmount = discountAmount.Add(levelDiscountAmount)
+			}
+		}
+	}
+
+	if len(productIDs) > 0 {
+		bestPromo, err := s.promotionEngine.CalculateBestCombination(
+			req.StoreID,
+			totalAmount,
+			productIDs,
+			req.MemberCouponID,
+			req.MemberID,
+		)
+		if err == nil {
+			promotionDiscount = bestPromo.TotalDiscount
+			discountAmount = discountAmount.Add(promotionDiscount)
+			for _, p := range bestPromo.Promotions {
+				if p.CouponID > 0 {
+					couponAmount = couponAmount.Add(p.Discount)
+				}
 			}
 		}
 	}
@@ -156,6 +189,7 @@ func (s *OrderService) Create(req *dto.CreateOrderRequest) (*dto.CreateOrderResp
 		PointsEarned:   pointsEarned,
 		PointsUsed:     pointsUsed,
 		CouponID:       req.CouponID,
+		MemberCouponID: req.MemberCouponID,
 		Remark:         req.Remark,
 		Source:         req.Source,
 		Items:          orderItems,
@@ -435,6 +469,12 @@ func (s *OrderService) NotifyPayment(orderNo string, payMethod string, transacti
 		}
 	}
 
+	if order.MemberCouponID > 0 {
+		if err := s.couponRepo.UseCoupon(order.MemberCouponID, order.ID); err != nil {
+			log.Printf("use coupon failed: %v", err)
+		}
+	}
+
 	if s.nsqProducer != nil {
 		payData, _ := json.Marshal(map[string]interface{}{
 			"order_id":       order.ID,
@@ -642,6 +682,7 @@ func (s *OrderService) convertToDetailResponse(order *model.Order) *dto.OrderDet
 		PointsEarned:    order.PointsEarned,
 		PointsUsed:      order.PointsUsed,
 		CouponID:        order.CouponID,
+		MemberCouponID:  order.MemberCouponID,
 		Remark:          order.Remark,
 		Source:          order.Source,
 		Items:           items,

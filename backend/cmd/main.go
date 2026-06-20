@@ -47,6 +47,8 @@ func main() {
 		&model.MemberPointsRecord{},
 		&model.Coupon{},
 		&model.MemberCoupon{},
+		&model.Promotion{},
+		&model.PromotionTier{},
 		&model.DailyReport{},
 		&model.ProductSalesReport{},
 		&model.CategorySalesReport{},

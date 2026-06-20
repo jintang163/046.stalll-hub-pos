@@ -3,6 +3,9 @@ package repository
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -112,6 +115,71 @@ func (r *CouponRepository) IssueToMembers(couponID uint, memberIDs []uint) ([]mo
 	return memberCoupons, nil
 }
 
+func (r *CouponRepository) ClaimCoupon(memberID, couponID uint) (*model.MemberCoupon, error) {
+	coupon, err := r.GetByID(couponID)
+	if err != nil {
+		return nil, err
+	}
+
+	if coupon.Status != 1 {
+		return nil, errors.New("coupon is not active")
+	}
+
+	now := time.Now()
+	if coupon.StartTime != nil && coupon.StartTime.After(now) {
+		return nil, errors.New("coupon is not available yet")
+	}
+	if coupon.EndTime != nil && coupon.EndTime.Before(now) {
+		return nil, errors.New("coupon has expired")
+	}
+
+	if coupon.TotalCount > 0 && coupon.UsedCount >= coupon.TotalCount {
+		return nil, errors.New("coupon is out of stock")
+	}
+
+	var existingCount int64
+	database.DB.Model(&model.MemberCoupon{}).
+		Where("coupon_id = ? AND member_id = ?", couponID, memberID).
+		Count(&existingCount)
+	if int(existingCount) >= coupon.PerUserLimit {
+		return nil, errors.New("coupon limit per user reached")
+	}
+
+	var expireAt *time.Time
+	if coupon.ValidityType == "fixed" {
+		expireAt = coupon.EndTime
+	} else {
+		t := now.AddDate(0, 0, coupon.ValidityDays)
+		expireAt = &t
+	}
+
+	mc := &model.MemberCoupon{
+		StoreID:  coupon.StoreID,
+		MemberID: memberID,
+		CouponID: couponID,
+		Code:     r.generateCouponCode(),
+		Status:   1,
+		ExpireAt: expireAt,
+	}
+
+	err = database.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(mc).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&model.Coupon{}).Where("id = ?", couponID).
+			UpdateColumn("used_count", gorm.Expr("used_count + 1")).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	mc.Coupon = *coupon
+	return mc, nil
+}
+
 func (r *CouponRepository) GetMemberCoupons(memberID uint, status int, page, pageSize int) ([]model.MemberCoupon, int64, error) {
 	var memberCoupons []model.MemberCoupon
 	var total int64
@@ -133,6 +201,16 @@ func (r *CouponRepository) GetMemberCoupons(memberID uint, status int, page, pag
 	err := db.Preload("Coupon").
 		Order("id DESC").Offset(offset).Limit(pageSize).Find(&memberCoupons).Error
 	return memberCoupons, total, err
+}
+
+func (r *CouponRepository) GetMemberCouponByID(id uint) (*model.MemberCoupon, error) {
+	var mc model.MemberCoupon
+	err := database.DB.Where("id = ?", id).
+		Preload("Coupon").First(&mc).Error
+	if err != nil {
+		return nil, err
+	}
+	return &mc, nil
 }
 
 func (r *CouponRepository) GetMemberCoupon(id, memberID uint) (*model.MemberCoupon, error) {
@@ -213,12 +291,13 @@ func (r *CouponRepository) GetAvailableCoupons(memberID, storeID uint, amount fl
 			continue
 		}
 
-		if mc.Coupon.ApplicableType != "all" && len(productIDs) > 0 {
-			applicableIDs := mc.Coupon.ApplicableIDs
+		if mc.Coupon.ApplicableType != "all" && len(productIDs) > 0 && mc.Coupon.ApplicableIDs != "" {
+			parts := strings.Split(mc.Coupon.ApplicableIDs, ",")
 			found := false
 			for _, pid := range productIDs {
-				for _, aid := range applicableIDs {
-					if pid == aid {
+				for _, aidStr := range parts {
+					var aid uint
+					if _, err := fmt.Sscanf(aidStr, "%d", &aid); err == nil && pid == aid {
 						found = true
 						break
 					}

@@ -8,18 +8,22 @@ import (
 )
 
 type SchedulerService struct {
-	rechargeService *RechargeActivityService
+	rechargeService  *RechargeActivityService
+	promotionService *PromotionEngineService
 }
 
 func NewSchedulerService() *SchedulerService {
 	return &SchedulerService{
-		rechargeService: NewRechargeActivityService(),
+		rechargeService:  NewRechargeActivityService(),
+		promotionService: NewPromotionEngineService(),
 	}
 }
 
 func (s *SchedulerService) StartAllSchedulers() {
 	go s.runBirthdayCouponScheduler()
 	go s.runRechargeActivityScheduler()
+	go s.runPromotionScheduler()
+	go s.runCouponStatusScheduler()
 	log.Println("[Scheduler] All schedulers started")
 }
 
@@ -42,6 +46,28 @@ func (s *SchedulerService) runRechargeActivityScheduler() {
 
 	for range ticker.C {
 		s.checkRechargeActivities()
+	}
+}
+
+func (s *SchedulerService) runPromotionScheduler() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	s.checkPromotions()
+
+	for range ticker.C {
+		s.checkPromotions()
+	}
+}
+
+func (s *SchedulerService) runCouponStatusScheduler() {
+	ticker := time.NewTicker(1 * time.Hour)
+	defer ticker.Stop()
+
+	s.checkCouponStatus()
+
+	for range ticker.C {
+		s.checkCouponStatus()
 	}
 }
 
@@ -91,10 +117,10 @@ func (s *SchedulerService) checkBirthdayCoupons() {
 			}
 
 			var expireAt *time.Time
-			if coupon.ValidType == "fixed" && coupon.EndTime != nil {
+			if coupon.ValidityType == "fixed" && coupon.EndTime != nil {
 				expireAt = coupon.EndTime
-			} else if coupon.ValidType == "relative" && coupon.ValidDays > 0 {
-				t := now.AddDate(0, 0, coupon.ValidDays)
+			} else if coupon.ValidityType == "relative" && coupon.ValidityDays > 0 {
+				t := now.AddDate(0, 0, coupon.ValidityDays)
 				expireAt = &t
 			} else {
 				t := now.AddDate(0, 0, 30)
@@ -102,11 +128,11 @@ func (s *SchedulerService) checkBirthdayCoupons() {
 			}
 
 			mc := &model.MemberCoupon{
-				StoreID:    member.StoreID,
-				MemberID:   member.ID,
-				CouponID:   coupon.ID,
-				Status:     1,
-				ExpireTime: expireAt,
+				StoreID:  member.StoreID,
+				MemberID: member.ID,
+				CouponID: coupon.ID,
+				Status:   1,
+				ExpireAt: expireAt,
 			}
 
 			if err := database.DB.Create(mc).Error; err != nil {
@@ -131,5 +157,43 @@ func (s *SchedulerService) checkRechargeActivities() {
 		log.Printf("[Scheduler] Failed to deactivate expired recharge activities: %v", err)
 	} else if deactivated > 0 {
 		log.Printf("[Scheduler] Deactivated %d expired recharge activities", deactivated)
+	}
+}
+
+func (s *SchedulerService) checkPromotions() {
+	activated, err := s.promotionService.ActivatePendingPromotions()
+	if err != nil {
+		log.Printf("[Scheduler] Failed to activate pending promotions: %v", err)
+	} else if activated > 0 {
+		log.Printf("[Scheduler] Activated %d promotions", activated)
+	}
+
+	deactivated, err := s.promotionService.DeactivateExpiredPromotions()
+	if err != nil {
+		log.Printf("[Scheduler] Failed to deactivate expired promotions: %v", err)
+	} else if deactivated > 0 {
+		log.Printf("[Scheduler] Deactivated %d expired promotions", deactivated)
+	}
+}
+
+func (s *SchedulerService) checkCouponStatus() {
+	now := time.Now()
+
+	result := database.DB.Model(&model.Coupon{}).
+		Where("status = 1 AND end_time IS NOT NULL AND end_time < ?", now).
+		Update("status", 2)
+	if result.Error != nil {
+		log.Printf("[Scheduler] Failed to deactivate expired coupons: %v", result.Error)
+	} else if result.RowsAffected > 0 {
+		log.Printf("[Scheduler] Deactivated %d expired coupons", result.RowsAffected)
+	}
+
+	result2 := database.DB.Model(&model.MemberCoupon{}).
+		Where("status = 1 AND expire_at IS NOT NULL AND expire_at < ?", now).
+		Update("status", 3)
+	if result2.Error != nil {
+		log.Printf("[Scheduler] Failed to expire member coupons: %v", result2.Error)
+	} else if result2.RowsAffected > 0 {
+		log.Printf("[Scheduler] Expired %d member coupons", result2.RowsAffected)
 	}
 }

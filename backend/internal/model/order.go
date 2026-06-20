@@ -26,6 +26,7 @@ type Order struct {
 	PointsEarned    int             `gorm:"default:0" json:"points_earned"`
 	PointsUsed      int             `gorm:"default:0" json:"points_used"`
 	CouponID        uint            `json:"coupon_id"`
+	MemberCouponID  uint            `json:"member_coupon_id"`
 	Remark          string          `gorm:"size:500" json:"remark"`
 	Source          string          `gorm:"size:20;default:cashier" json:"source"`
 	Store           Store           `gorm:"foreignKey:StoreID" json:"store,omitempty"`

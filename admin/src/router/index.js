@@ -56,6 +56,12 @@ const routes = [
         component: () => import('@/views/coupons/index.vue'),
         meta: { title: '优惠券管理', icon: 'Ticket' }
       },
+      {
+        path: 'promotions',
+        name: 'Promotions',
+        component: () => import('@/views/promotions/index.vue'),
+        meta: { title: '营销活动', icon: 'Present' }
+      },
       // {
       //   path: 'inventory',
       //   name: 'Inventory',

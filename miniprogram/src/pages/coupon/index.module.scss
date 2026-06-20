@@ -1,0 +1,276 @@
+.container {
+  min-height: 100vh;
+  background: #f5f7fa;
+  padding-bottom: 40px;
+}
+
+.header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 32px 24px;
+  color: #fff;
+
+  .title {
+    font-size: 36px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+
+  .subtitle {
+    font-size: 24px;
+    opacity: 0.9;
+  }
+}
+
+.tabs {
+  display: flex;
+  background: #fff;
+  padding: 0 16px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  border-bottom: 1px solid #eee;
+}
+
+.tab {
+  flex: 1;
+  padding: 24px 0;
+  text-align: center;
+  font-size: 28px;
+  color: #666;
+  position: relative;
+
+  &.active {
+    color: #667eea;
+    font-weight: 600;
+
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 48px;
+      height: 4px;
+      background: #667eea;
+      border-radius: 2px;
+    }
+  }
+}
+
+.couponList {
+  padding: 24px;
+}
+
+.couponCard {
+  background: #fff;
+  border-radius: 16px;
+  margin-bottom: 24px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  position: relative;
+
+  .couponInner {
+    display: flex;
+    padding: 0;
+  }
+
+  .couponLeft {
+    width: 200px;
+    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+    padding: 32px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    position: relative;
+
+    &.discount {
+      background: linear-gradient(135deg, #51cf66 0%, #40c057 100%);
+    }
+
+    &.exchange {
+      background: linear-gradient(135deg, #ffd43b 0%, #fab005 100%);
+    }
+
+    &::after {
+      content: '';
+      position: absolute;
+      right: -8px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 16px;
+      height: 16px;
+      background: #f5f7fa;
+      border-radius: 50%;
+    }
+  }
+
+  .couponValue {
+    font-size: 56px;
+    font-weight: 700;
+    line-height: 1;
+
+    .symbol {
+      font-size: 28px;
+      margin-right: 4px;
+    }
+
+    .unit {
+      font-size: 24px;
+      margin-left: 4px;
+    }
+  }
+
+  .couponCondition {
+    font-size: 22px;
+    margin-top: 8px;
+    opacity: 0.95;
+  }
+
+  .couponRight {
+    flex: 1;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  .couponName {
+    font-size: 30px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 8px;
+  }
+
+  .couponDesc {
+    font-size: 22px;
+    color: #999;
+    line-height: 1.5;
+  }
+
+  .couponMeta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 16px;
+  }
+
+  .couponTime {
+    font-size: 20px;
+    color: #bbb;
+  }
+
+  .couponStock {
+    font-size: 20px;
+    color: #ff6b6b;
+  }
+
+  .claimBtn {
+    position: absolute;
+    right: 24px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+    padding: 12px 32px;
+    border-radius: 32px;
+    font-size: 24px;
+    font-weight: 500;
+
+    &.disabled {
+      background: #ccc;
+    }
+
+    &.claimed {
+      background: #e9ecef;
+      color: #868e96;
+    }
+  }
+}
+
+.promotionCard {
+  background: #fff;
+  border-radius: 16px;
+  margin-bottom: 24px;
+  padding: 32px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+
+  .promoHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+
+  .promoName {
+    font-size: 32px;
+    font-weight: 600;
+    color: #333;
+  }
+
+  .promoTag {
+    padding: 6px 20px;
+    border-radius: 24px;
+    font-size: 22px;
+    color: #fff;
+    background: #ff6b6b;
+
+    &.discount {
+      background: #51cf66;
+    }
+
+    &.tiered {
+      background: #fab005;
+    }
+  }
+
+  .promoRule {
+    font-size: 28px;
+    color: #667eea;
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+
+  .promoDesc {
+    font-size: 24px;
+    color: #999;
+    line-height: 1.6;
+  }
+
+  .promoTime {
+    margin-top: 16px;
+    font-size: 22px;
+    color: #bbb;
+  }
+
+  .tierList {
+    margin-top: 16px;
+
+    .tierItem {
+      padding: 8px 0;
+      font-size: 24px;
+      color: #666;
+    }
+  }
+}
+
+.emptyState {
+  padding: 120px 0;
+  text-align: center;
+
+  .emptyIcon {
+    font-size: 80px;
+    margin-bottom: 24px;
+  }
+
+  .emptyText {
+    font-size: 28px;
+    color: #999;
+  }
+}
+
+.loading {
+  padding: 80px 0;
+  text-align: center;
+}

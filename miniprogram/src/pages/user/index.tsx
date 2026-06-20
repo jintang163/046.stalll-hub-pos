@@ -10,7 +10,7 @@ import styles from './index.module.scss'
 
 const menuList = [
   { icon: '📦', title: '我的订单', path: '/pages/order/list' },
-  { icon: '🎟️', title: '优惠券', path: '/pages/coupon/list' },
+  { icon: '🎟️', title: '领券中心', path: '/pages/coupon/index' },
   { icon: '💰', title: '充值', path: '/pages/user/recharge' },
   { icon: '🏪', title: '切换门店', path: '/pages/store/select' },
   { icon: '📍', title: '收货地址', path: '/pages/address/list' },

@@ -61,21 +61,23 @@ type Coupon struct {
 	Name            string          `gorm:"size:100;not null" json:"name"`
 	Type            string          `gorm:"size:20;not null" json:"type"`
 	Value           decimal.Decimal `gorm:"type:decimal(10,2);not null" json:"value"`
-	MinConsume      decimal.Decimal `gorm:"type:decimal(10,2);default:0" json:"min_consume"`
+	MinAmount       decimal.Decimal `gorm:"type:decimal(10,2);default:0" json:"min_amount"`
 	DiscountRate    decimal.Decimal `gorm:"type:decimal(5,2)" json:"discount_rate"`
 	MaxDiscount     decimal.Decimal `gorm:"type:decimal(10,2)" json:"max_discount"`
 	TotalCount      int             `gorm:"default:0" json:"total_count"`
 	UsedCount       int             `gorm:"default:0" json:"used_count"`
 	PerUserLimit    int             `gorm:"default:1" json:"per_user_limit"`
-	ValidType       string          `gorm:"size:20;default:fixed" json:"valid_type"`
-	ValidDays       int             `gorm:"default:0" json:"valid_days"`
+	ValidityType    string          `gorm:"size:20;default:fixed" json:"validity_type"`
+	ValidityDays    int             `gorm:"default:0" json:"validity_days"`
 	StartTime       *time.Time      `json:"start_time"`
 	EndTime         *time.Time      `json:"end_time"`
-	ApplyScope      string          `gorm:"size:20;default:all" json:"apply_scope"`
-	ProductIDs      string          `gorm:"size:1000" json:"product_ids"`
+	ApplicableType  string          `gorm:"size:20;default:all" json:"applicable_type"`
+	ApplicableIDs   string          `gorm:"size:1000" json:"applicable_ids"`
 	ExcludeProducts string          `gorm:"size:1000" json:"exclude_products"`
+	Stackable       bool            `gorm:"default:false" json:"stackable"`
 	Status          int             `gorm:"default:1" json:"status"`
 	Description     string          `gorm:"size:500" json:"description"`
+	ExchangeProductID uint          `json:"exchange_product_id"`
 	Store           Store           `gorm:"foreignKey:StoreID" json:"store,omitempty"`
 }
 
@@ -132,11 +134,42 @@ type MemberCoupon struct {
 	MemberID   uint       `gorm:"not null;index" json:"member_id"`
 	CouponID   uint       `gorm:"not null;index" json:"coupon_id"`
 	OrderID    uint       `json:"order_id"`
+	Code       string     `gorm:"size:32;uniqueIndex" json:"code"`
 	Status     int        `gorm:"default:0" json:"status"`
-	UsedTime   *time.Time `json:"used_time"`
-	ExpireTime *time.Time `json:"expire_time"`
+	UsedAt     *time.Time `json:"used_at"`
+	ExpireAt   *time.Time `json:"expire_at"`
 	Store      Store      `gorm:"foreignKey:StoreID" json:"store,omitempty"`
 	Member     Member     `gorm:"foreignKey:MemberID" json:"member,omitempty"`
 	Coupon     Coupon     `gorm:"foreignKey:CouponID" json:"coupon,omitempty"`
 	Order      *Order     `gorm:"foreignKey:OrderID" json:"order,omitempty"`
+}
+
+type Promotion struct {
+	BaseModel
+	StoreID         uint            `gorm:"not null;index" json:"store_id"`
+	RuleKey         string          `gorm:"size:50;index" json:"rule_key"`
+	Name            string          `gorm:"size:100;not null" json:"name"`
+	Type            string          `gorm:"size:30;not null" json:"type"`
+	RuleConfig      string          `gorm:"type:text" json:"rule_config"`
+	MinAmount       decimal.Decimal `gorm:"type:decimal(10,2);default:0" json:"min_amount"`
+	DiscountAmount  decimal.Decimal `gorm:"type:decimal(10,2);default:0" json:"discount_amount"`
+	DiscountRate    decimal.Decimal `gorm:"type:decimal(5,2)" json:"discount_rate"`
+	MaxDiscount     decimal.Decimal `gorm:"type:decimal(10,2)" json:"max_discount"`
+	ApplicableType  string          `gorm:"size:20;default:all" json:"applicable_type"`
+	ApplicableIDs   string          `gorm:"size:1000" json:"applicable_ids"`
+	StartTime       *time.Time      `json:"start_time"`
+	EndTime         *time.Time      `json:"end_time"`
+	Priority        int             `gorm:"default:0" json:"priority"`
+	Stackable       bool            `gorm:"default:false" json:"stackable"`
+	Status          int             `gorm:"default:0" json:"status"`
+	Description     string          `gorm:"size:500" json:"description"`
+	Store           Store           `gorm:"foreignKey:StoreID" json:"store,omitempty"`
+}
+
+type PromotionTier struct {
+	BaseModel
+	PromotionID uint            `gorm:"not null;index" json:"promotion_id"`
+	MinAmount   decimal.Decimal `gorm:"type:decimal(10,2);not null" json:"min_amount"`
+	DiscountAmount decimal.Decimal `gorm:"type:decimal(10,2);not null" json:"discount_amount"`
+	Promotion   Promotion       `gorm:"foreignKey:PromotionID" json:"promotion,omitempty"`
 }

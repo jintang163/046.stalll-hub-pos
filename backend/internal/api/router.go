@@ -24,6 +24,7 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 	storeHandler := handler.NewStoreHandler()
 	memberHandler := handler.NewMemberHandler()
 	couponHandler := handler.NewCouponHandler()
+	promotionHandler := handler.NewPromotionHandler()
 	reportHandler := handler.NewReportHandler()
 	paymentHandler := handler.NewPaymentHandler()
 	tableHandler := handler.NewTableHandler()
@@ -159,6 +160,32 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 		{
 			memberCoupons.GET("", couponHandler.ListMemberCoupons)
 			memberCoupons.GET("/:id", couponHandler.GetMemberCoupon)
+		}
+
+		promotions := api.Group("/promotions")
+		promotions.Use(middleware.JWTAuth())
+		{
+			promotions.POST("", promotionHandler.CreatePromotion)
+			promotions.GET("", promotionHandler.ListPromotions)
+			promotions.GET("/:id", promotionHandler.GetPromotion)
+			promotions.PUT("/:id", promotionHandler.UpdatePromotion)
+			promotions.DELETE("/:id", promotionHandler.DeletePromotion)
+			promotions.POST("/calculate", promotionHandler.CalculateBestCombination)
+		}
+
+		miniPromotions := api.Group("/mini/promotions")
+		miniPromotions.Use(middleware.MemberAuth())
+		{
+			miniPromotions.GET("/active", promotionHandler.GetActivePromotions)
+			miniPromotions.POST("/calculate", promotionHandler.CalculateBestCombination)
+		}
+
+		miniCoupons := api.Group("/mini/coupons")
+		miniCoupons.Use(middleware.MemberAuth())
+		{
+			miniCoupons.GET("/available", promotionHandler.GetAvailableCoupons)
+			miniCoupons.GET("/my", promotionHandler.GetMyCoupons)
+			miniCoupons.POST("/claim", promotionHandler.ClaimCoupon)
 		}
 
 		reports := api.Group("/reports")
