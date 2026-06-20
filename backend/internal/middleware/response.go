@@ -88,3 +88,23 @@ func XMLResponse(c *gin.Context, statusCode int, code string, message string) {
 		Message: message,
 	})
 }
+
+type PageData struct {
+	List     interface{} `json:"list"`
+	Total    int64       `json:"total"`
+	Page     int         `json:"page"`
+	PageSize int         `json:"page_size"`
+}
+
+func PageSuccess(c *gin.Context, list interface{}, total int64, page, pageSize int) {
+	c.JSON(http.StatusOK, Response{
+		Code:    CodeSuccess,
+		Message: "success",
+		Data: PageData{
+			List:     list,
+			Total:    total,
+			Page:     page,
+			PageSize: pageSize,
+		},
+	})
+}

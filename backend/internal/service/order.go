@@ -28,6 +28,7 @@ type OrderService struct {
 	promotionEngine  *PromotionEngineService
 	pointsEngine     *PointsEngineService
 	nsqProducer      *nsq.Producer
+	stallRepo        *repository.StallRepository
 	cfg              *config.Config
 }
 
@@ -41,6 +42,7 @@ func NewOrderService() *OrderService {
 		promotionEngine:  NewPromotionEngineService(),
 		pointsEngine:     NewPointsEngineService(),
 		nsqProducer:      nsq.Producer,
+		stallRepo:        repository.NewStallRepository(nil),
 		cfg:              config.AppConfig,
 	}
 }
@@ -91,9 +93,23 @@ func (s *OrderService) Create(req *dto.CreateOrderRequest) (*dto.CreateOrderResp
 		subtotal := item.Price.Mul(decimal.NewFromInt(int64(item.Quantity)))
 		totalAmount = totalAmount.Add(subtotal)
 
+		var stallID uint
+		var stallAmount decimal.Decimal
+		var platformAmount decimal.Decimal
+
+		if product.StallID > 0 {
+			stallID = product.StallID
+			stall, err := s.stallRepo.GetByID(product.StallID)
+			if err == nil {
+				stallAmount = subtotal.Mul(stall.RevenueRatio)
+				platformAmount = subtotal.Mul(stall.PlatformRatio)
+			}
+		}
+
 		orderItems = append(orderItems, model.OrderItem{
 			ProductID:       item.ProductID,
 			SKUID:           item.SKUID,
+			StallID:         stallID,
 			ProductName:     product.Name,
 			SKUName:         sku.Name,
 			AttributeValues: s.attributeValuesToString(item.AttributeValues),
@@ -101,6 +117,8 @@ func (s *OrderService) Create(req *dto.CreateOrderRequest) (*dto.CreateOrderResp
 			Price:           item.Price,
 			Quantity:        item.Quantity,
 			Subtotal:        subtotal,
+			StallAmount:     stallAmount,
+			PlatformAmount:  platformAmount,
 			Status:          1,
 			PrintStatus:     0,
 			CookStatus:      0,
@@ -213,6 +231,8 @@ func (s *OrderService) Create(req *dto.CreateOrderRequest) (*dto.CreateOrderResp
 			"created_at":  order.CreatedAt,
 		})
 		_ = s.nsqProducer.Publish(nsq.TopicOrderCreated, orderData)
+
+		s.publishStallOrders(order, "create")
 	}
 
 	return &dto.CreateOrderResponse{
@@ -704,6 +724,30 @@ func (s *OrderService) generatePrepayID(orderNo string) string {
 
 func (s *OrderService) generatePaySign(params map[string]string) string {
 	return fmt.Sprintf("%x", params["nonceStr"])
+}
+
+func (s *OrderService) publishStallOrders(order *model.Order, action string) {
+	stallItems := make(map[uint][]model.OrderItem)
+	for _, item := range order.Items {
+		if item.StallID > 0 {
+			stallItems[item.StallID] = append(stallItems[item.StallID], item)
+		}
+	}
+
+	for stallID, items := range stallItems {
+		stallOrderData := map[string]interface{}{
+			"order_id":   order.ID,
+			"order_no":   order.OrderNo,
+			"store_id":   order.StoreID,
+			"stall_id":   stallID,
+			"table_no":   order.TableNo,
+			"order_type": order.OrderType,
+			"remark":     order.Remark,
+			"items":      items,
+			"created_at": order.CreatedAt,
+		}
+		_ = nsq.PublishStallOrder(order.OrderNo, order.StoreID, stallID, stallOrderData, action)
+	}
 }
 
 var _ = errors.New

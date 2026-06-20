@@ -26,6 +26,7 @@ type Product struct {
 	IsRecommend     bool           `gorm:"default:false" json:"is_recommend"`
 	StockWarningThreshold int      `gorm:"default:10" json:"stock_warning_threshold"`
 	Category        Category       `gorm:"foreignKey:CategoryID" json:"category,omitempty"`
+	Stall           *Stall         `gorm:"foreignKey:StallID" json:"stall,omitempty"`
 	SKUs            []ProductSKU   `gorm:"foreignKey:ProductID" json:"skus,omitempty"`
 	Attributes      []ProductAttribute `gorm:"foreignKey:ProductID" json:"attributes,omitempty"`
 }

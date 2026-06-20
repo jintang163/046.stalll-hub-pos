@@ -12,6 +12,9 @@ const (
 	TopicMemberPoints    = "member_points"
 	TopicStockWarning    = "stock_warning"
 	TopicOrderUpdate     = "order_update"
+	TopicStallChanged    = "stall_change"
+	TopicStallOrder      = "stall_order"
+	TopicStallDeviceAlert = "stall_device_alert"
 )
 
 type ProductChangeMessage struct {
@@ -104,6 +107,65 @@ func PublishPrintOrder(orderID uint, orderNo string, storeID uint, printerID uin
 		Timestamp: GetCurrentTimestamp(),
 	}
 	return Publish(TopicPrintOrder, msg)
+}
+
+type StallChangeMessage struct {
+	Action    string      `json:"action"`
+	StoreID   uint        `json:"store_id"`
+	StallID   uint        `json:"stall_id"`
+	Data      interface{} `json:"data"`
+	Timestamp int64       `json:"timestamp"`
+}
+
+type StallOrderMessage struct {
+	OrderNo    string      `json:"order_no"`
+	StoreID    uint        `json:"store_id"`
+	StallID    uint        `json:"stall_id"`
+	OrderData  interface{} `json:"order_data"`
+	Action     string      `json:"action"`
+	Timestamp  int64       `json:"timestamp"`
+}
+
+type StallDeviceAlertMessage struct {
+	DeviceID   string `json:"device_id"`
+	StallID    uint   `json:"stall_id"`
+	StoreID    uint   `json:"store_id"`
+	AlertType  string `json:"alert_type"`
+	Timestamp  int64  `json:"timestamp"`
+}
+
+func PublishStallChange(action string, storeID, stallID uint, data interface{}) error {
+	msg := StallChangeMessage{
+		Action:    action,
+		StoreID:   storeID,
+		StallID:   stallID,
+		Data:      data,
+		Timestamp: GetCurrentTimestamp(),
+	}
+	return Publish(TopicStallChanged, msg)
+}
+
+func PublishStallOrder(orderNo string, storeID, stallID uint, orderData interface{}, action string) error {
+	msg := StallOrderMessage{
+		OrderNo:   orderNo,
+		StoreID:   storeID,
+		StallID:   stallID,
+		OrderData: orderData,
+		Action:    action,
+		Timestamp: GetCurrentTimestamp(),
+	}
+	return Publish(TopicStallOrder, msg)
+}
+
+func PublishStallDeviceAlert(deviceID string, storeID, stallID uint, alertType string) error {
+	msg := StallDeviceAlertMessage{
+		DeviceID:  deviceID,
+		StallID:   stallID,
+		StoreID:   storeID,
+		AlertType: alertType,
+		Timestamp: GetCurrentTimestamp(),
+	}
+	return Publish(TopicStallDeviceAlert, msg)
 }
 
 func GetCurrentTimestamp() int64 {

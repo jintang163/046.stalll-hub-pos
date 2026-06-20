@@ -32,6 +32,7 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 	recommendHandler := handler.NewRecommendHandler()
 	pointsRuleHandler := handler.NewPointsRuleHandler()
 	rechargeActivityHandler := handler.NewRechargeActivityHandler()
+	stallHandler := handler.NewStallHandler()
 
 	orderHandler := handler.NewOrderHandler(nil)
 
@@ -317,6 +318,59 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 			recommendations.PUT("/config", middleware.JWTAuth(), recommendHandler.UpdateConfig)
 			recommendations.POST("/refresh", middleware.JWTAuth(), recommendHandler.TriggerRefresh)
 			recommendations.GET("/refresh/status", middleware.JWTAuth(), recommendHandler.GetRefreshStatus)
+		}
+
+		stalls := api.Group("/stalls")
+		stalls.Use(middleware.JWTAuth())
+		{
+			stalls.POST("", stallHandler.CreateStall)
+			stalls.GET("", stallHandler.ListStalls)
+			stalls.GET("/all", stallHandler.GetAllStalls)
+			stalls.GET("/:id", stallHandler.GetStall)
+			stalls.PUT("/:id", stallHandler.UpdateStall)
+			stalls.DELETE("/:id", stallHandler.DeleteStall)
+		}
+
+		stallDevices := api.Group("/stall-devices")
+		stallDevices.Use(middleware.JWTAuth())
+		{
+			stallDevices.POST("", stallHandler.RegisterDevice)
+			stallDevices.GET("", stallHandler.ListDevices)
+			stallDevices.GET("/:id", stallHandler.GetDevice)
+			stallDevices.DELETE("/:id", stallHandler.DeleteDevice)
+		}
+
+		stallHeartbeat := api.Group("/stall/heartbeat")
+		{
+			stallHeartbeat.POST("", stallHandler.Heartbeat)
+		}
+
+		stallUsers := api.Group("/stall-users")
+		stallUsers.Use(middleware.JWTAuth())
+		{
+			stallUsers.POST("", stallHandler.CreateStallUser)
+			stallUsers.GET("", stallHandler.ListStallUsers)
+			stallUsers.PUT("/:id", stallHandler.UpdateStallUser)
+			stallUsers.DELETE("/:id", stallHandler.DeleteStallUser)
+		}
+
+		stallAuth := api.Group("/stall/auth")
+		{
+			stallAuth.POST("/login", stallHandler.StallLogin)
+		}
+
+		stallSettlements := api.Group("/stall-settlements")
+		stallSettlements.Use(middleware.JWTAuth())
+		{
+			stallSettlements.POST("", stallHandler.CreateSettlement)
+			stallSettlements.GET("", stallHandler.ListSettlements)
+		}
+
+		stallReports := api.Group("/stall-reports")
+		stallReports.Use(middleware.JWTAuth())
+		{
+			stallReports.GET("/daily", stallHandler.GetDailyReport)
+			stallReports.POST("/daily/generate", stallHandler.GenerateDailyReport)
 		}
 	}
 

@@ -9,6 +9,8 @@ func InitAllConsumers() error {
 	orderConsumer := NewOrderCreateConsumer()
 	paymentConsumer := NewPaymentSuccessConsumer()
 	productConsumer := NewProductChangeConsumer()
+	stallChangeConsumer := NewStallChangeConsumer()
+	stallDeviceAlertConsumer := NewStallDeviceAlertConsumer()
 
 	configs := []nsq.ConsumerRegistration{
 		{
@@ -25,6 +27,16 @@ func InitAllConsumers() error {
 			Topic:   nsq.TopicProductChanged,
 			Channel: "product_change_channel",
 			Handler: productConsumer.HandleMessage,
+		},
+		{
+			Topic:   nsq.TopicStallChanged,
+			Channel: "stall_change_channel",
+			Handler: stallChangeConsumer.HandleMessage,
+		},
+		{
+			Topic:   nsq.TopicStallDeviceAlert,
+			Channel: "stall_device_alert_channel",
+			Handler: stallDeviceAlertConsumer.HandleMessage,
 		},
 	}
 

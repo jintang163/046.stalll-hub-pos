@@ -312,6 +312,51 @@ class IPC {
         return { success: false, error: error.message }
       }
     })
+
+    ipcMain.handle('db:getStalls', () => {
+      try {
+        return db.getStalls()
+      } catch (error) {
+        console.error('[IPC] db:getStalls error:', error)
+        return []
+      }
+    })
+
+    ipcMain.handle('db:getStallById', (_, id) => {
+      try {
+        return db.getStallById(id)
+      } catch (error) {
+        console.error('[IPC] db:getStallById error:', error)
+        return null
+      }
+    })
+
+    ipcMain.handle('db:saveStalls', (_, stalls) => {
+      try {
+        return db.saveStalls(stalls)
+      } catch (error) {
+        console.error('[IPC] db:saveStalls error:', error)
+        return { success: false, error: error.message }
+      }
+    })
+
+    ipcMain.handle('db:getProductsByStall', (_, stallId) => {
+      try {
+        return db.getProductsByStall(stallId)
+      } catch (error) {
+        console.error('[IPC] db:getProductsByStall error:', error)
+        return []
+      }
+    })
+
+    ipcMain.handle('db:getStallDailySales', (_, stallId, date) => {
+      try {
+        return db.getStallDailySales(stallId, date)
+      } catch (error) {
+        console.error('[IPC] db:getStallDailySales error:', error)
+        return { orderCount: 0, totalAmount: 0, stallAmount: 0, platformAmount: 0 }
+      }
+    })
   }
 
   static initNSQHandlers(ipcMain, nsq, store) {
@@ -431,6 +476,13 @@ class IPC {
           throw new Error('Sync cancelled by user')
         }
 
+        updateProgress({ percent: 12, message: '同步摊位数据...', currentStep: 'stalls' })
+        await IPC.syncStalls(db, apiBaseURL, storeID, updateProgress)
+
+        if (syncCancelled) {
+          throw new Error('Sync cancelled by user')
+        }
+
         updateProgress({ percent: 20, message: '同步商品数据...', currentStep: 'products' })
         await IPC.syncProducts(db, apiBaseURL, storeID, updateProgress)
 
@@ -519,7 +571,7 @@ class IPC {
           throw new Error('Sync cancelled by user')
         }
 
-        updateProgress({ percent: 50, message: '同步增量订单数据...', currentStep: 'orders' })
+        updateProgress({ percent: 30, message: '同步增量订单数据...', currentStep: 'orders' })
         await IPC.syncIncrementalOrders(db, apiBaseURL, storeID, lastSyncTime, updateProgress)
 
         if (syncCancelled) {
@@ -589,6 +641,26 @@ class IPC {
       }
     } catch (error) {
       console.error('[Sync] Categories sync error:', error)
+      updateProgress({ failCount: (syncProgress.failCount || 0) + 1 })
+      throw error
+    }
+  }
+
+  static async syncStalls(db, apiBaseURL, storeID, updateProgress) {
+    try {
+      const response = await axios.get(`${apiBaseURL}/stalls/all`, {
+        params: { store_id: storeID }
+      })
+      const stalls = response.data.data || []
+      
+      updateProgress({ totalCount: syncProgress.totalCount + stalls.length })
+      
+      if (stalls.length > 0) {
+        const result = db.saveStalls(stalls)
+        updateProgress({ successCount: syncProgress.successCount + result.count })
+      }
+    } catch (error) {
+      console.error('[Sync] Stalls sync error:', error)
       updateProgress({ failCount: (syncProgress.failCount || 0) + 1 })
       throw error
     }

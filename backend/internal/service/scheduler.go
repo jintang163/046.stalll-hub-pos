@@ -10,12 +10,14 @@ import (
 type SchedulerService struct {
 	rechargeService  *RechargeActivityService
 	promotionService *PromotionEngineService
+	stallService     *StallService
 }
 
 func NewSchedulerService() *SchedulerService {
 	return &SchedulerService{
 		rechargeService:  NewRechargeActivityService(),
 		promotionService: NewPromotionEngineService(),
+		stallService:     NewStallService(),
 	}
 }
 
@@ -24,6 +26,8 @@ func (s *SchedulerService) StartAllSchedulers() {
 	go s.runRechargeActivityScheduler()
 	go s.runPromotionScheduler()
 	go s.runCouponStatusScheduler()
+	go s.runStallDeviceCheckScheduler()
+	go s.runStallDailyReportScheduler()
 	log.Println("[Scheduler] All schedulers started")
 }
 
@@ -196,4 +200,39 @@ func (s *SchedulerService) checkCouponStatus() {
 	} else if result2.RowsAffected > 0 {
 		log.Printf("[Scheduler] Expired %d member coupons", result2.RowsAffected)
 	}
+}
+
+func (s *SchedulerService) runStallDeviceCheckScheduler() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		s.checkStallDevicesOffline()
+	}
+}
+
+func (s *SchedulerService) checkStallDevicesOffline() {
+	alertCount, err := s.stallService.CheckOfflineDevices()
+	if err != nil {
+		log.Printf("[Scheduler] Failed to check offline stall devices: %v", err)
+	} else if alertCount > 0 {
+		log.Printf("[Scheduler] Found %d offline stall devices", alertCount)
+	}
+}
+
+func (s *SchedulerService) runStallDailyReportScheduler() {
+	ticker := time.NewTicker(1 * time.Hour)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		now := time.Now()
+		if now.Hour() == 2 {
+			s.generateStallDailyReports()
+		}
+	}
+}
+
+func (s *SchedulerService) generateStallDailyReports() {
+	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	log.Printf("[Scheduler] Generating stall daily reports for %s", yesterday)
 }

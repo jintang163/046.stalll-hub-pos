@@ -43,6 +43,7 @@ class SQLiteDatabase {
         description TEXT,
         image TEXT,
         category_id INTEGER,
+        stall_id INTEGER,
         sort_order INTEGER DEFAULT 0,
         status INTEGER DEFAULT 1,
         is_hot INTEGER DEFAULT 0,
@@ -123,6 +124,44 @@ class SQLiteDatabase {
         paid_at TEXT
       )`,
       
+      `CREATE TABLE IF NOT EXISTS order_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_no TEXT NOT NULL,
+        product_id INTEGER NOT NULL,
+        product_name TEXT NOT NULL,
+        sku_id INTEGER NOT NULL,
+        sku_name TEXT NOT NULL,
+        stall_id INTEGER,
+        attribute_ids TEXT,
+        attribute_names TEXT,
+        price REAL DEFAULT 0,
+        quantity INTEGER NOT NULL,
+        subtotal REAL DEFAULT 0,
+        stall_amount REAL DEFAULT 0,
+        platform_amount REAL DEFAULT 0,
+        remark TEXT,
+        created_at TEXT,
+        FOREIGN KEY (order_no) REFERENCES orders(order_no) ON DELETE CASCADE
+      )`,
+      
+      `CREATE TABLE IF NOT EXISTS stalls (
+        id INTEGER PRIMARY KEY,
+        stall_no TEXT NOT NULL,
+        name TEXT NOT NULL,
+        type TEXT,
+        description TEXT,
+        logo TEXT,
+        revenue_ratio REAL DEFAULT 0.7,
+        platform_ratio REAL DEFAULT 0.3,
+        contact_name TEXT,
+        contact_phone TEXT,
+        printer_name TEXT,
+        sort_order INTEGER DEFAULT 0,
+        status INTEGER DEFAULT 1,
+        created_at TEXT,
+        updated_at TEXT
+      )`,
+      
       `CREATE TABLE IF NOT EXISTS sync_records (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         sync_type TEXT NOT NULL,
@@ -143,6 +182,7 @@ class SQLiteDatabase {
   createIndexes() {
     const indexes = [
       'CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id)',
+      'CREATE INDEX IF NOT EXISTS idx_products_stall ON products(stall_id)',
       'CREATE INDEX IF NOT EXISTS idx_products_status ON products(status)',
       'CREATE INDEX IF NOT EXISTS idx_skus_product ON skus(product_id)',
       'CREATE INDEX IF NOT EXISTS idx_skus_status ON skus(status)',
@@ -154,6 +194,10 @@ class SQLiteDatabase {
       'CREATE INDEX IF NOT EXISTS idx_orders_synced ON orders(synced)',
       'CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at)',
       'CREATE INDEX IF NOT EXISTS idx_orders_paid ON orders(paid_at)',
+      'CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_no)',
+      'CREATE INDEX IF NOT EXISTS idx_order_items_stall ON order_items(stall_id)',
+      'CREATE INDEX IF NOT EXISTS idx_stalls_status ON stalls(status)',
+      'CREATE INDEX IF NOT EXISTS idx_stalls_no ON stalls(stall_no)',
       'CREATE INDEX IF NOT EXISTS idx_sync_records_type ON sync_records(sync_type)',
       'CREATE INDEX IF NOT EXISTS idx_sync_records_status ON sync_records(status)',
       'CREATE INDEX IF NOT EXISTS idx_sync_records_time ON sync_records(start_time)'
@@ -371,8 +415,8 @@ class SQLiteDatabase {
     const tx = this.db.transaction(() => {
       const insertProduct = this.db.prepare(`
         INSERT OR REPLACE INTO products 
-        (id, name, description, image, category_id, sort_order, status, is_hot, is_recommend, warning_threshold, created_at, updated_at)
-        VALUES (@id, @name, @description, @image, @category_id, @sort_order, @status, @is_hot, @is_recommend, @warning_threshold, @created_at, @updated_at)
+        (id, name, description, image, category_id, stall_id, sort_order, status, is_hot, is_recommend, warning_threshold, created_at, updated_at)
+        VALUES (@id, @name, @description, @image, @category_id, @stall_id, @sort_order, @status, @is_hot, @is_recommend, @warning_threshold, @created_at, @updated_at)
       `)
 
       const insertSKU = this.db.prepare(`
@@ -409,6 +453,7 @@ class SQLiteDatabase {
           description: p.description || '',
           image: p.image || '',
           category_id: p.category_id,
+          stall_id: p.stall_id || null,
           sort_order: p.sort_order || 0,
           status: p.status ? 1 : 0,
           is_hot: p.is_hot ? 1 : 0,
@@ -704,6 +749,95 @@ class SQLiteDatabase {
 
   raw(sql, params = []) {
     return this.db.exec(sql, params)
+  }
+
+  getStalls() {
+    const stalls = this.db.prepare('SELECT * FROM stalls WHERE status = 1 ORDER BY sort_order ASC, id ASC').all()
+    return stalls.map(s => ({
+      ...s,
+      status: Boolean(s.status)
+    }))
+  }
+
+  getStallById(id) {
+    const stall = this.db.prepare('SELECT * FROM stalls WHERE id = ?').get(id)
+    if (!stall) return null
+    return {
+      ...stall,
+      status: Boolean(stall.status)
+    }
+  }
+
+  saveStalls(stalls) {
+    const tx = this.db.transaction(() => {
+      const insertStall = this.db.prepare(`
+        INSERT OR REPLACE INTO stalls 
+        (id, stall_no, name, type, description, logo, revenue_ratio, platform_ratio, 
+         contact_name, contact_phone, printer_name, sort_order, status, created_at, updated_at)
+        VALUES (@id, @stall_no, @name, @type, @description, @logo, @revenue_ratio, @platform_ratio,
+                @contact_name, @contact_phone, @printer_name, @sort_order, @status, @created_at, @updated_at)
+      `)
+
+      stalls.forEach(s => {
+        insertStall.run({
+          id: s.id,
+          stall_no: s.stall_no,
+          name: s.name,
+          type: s.type || 'normal',
+          description: s.description || '',
+          logo: s.logo || '',
+          revenue_ratio: s.revenue_ratio || 0.7,
+          platform_ratio: s.platform_ratio || 0.3,
+          contact_name: s.contact_name || '',
+          contact_phone: s.contact_phone || '',
+          printer_name: s.printer_name || '',
+          sort_order: s.sort_order || 0,
+          status: s.status ? 1 : 0,
+          created_at: s.created_at,
+          updated_at: s.updated_at
+        })
+      })
+    })
+
+    tx()
+    return { success: true, count: stalls.length }
+  }
+
+  getProductsByStall(stallId) {
+    const products = this.db.prepare(`
+      SELECT p.*, c.name as category_name 
+      FROM products p 
+      LEFT JOIN categories c ON p.category_id = c.id 
+      WHERE p.stall_id = ? AND p.status = 1
+      ORDER BY c.sort_order, p.sort_order
+    `).all(stallId)
+
+    return products.map(p => ({
+      ...p,
+      is_hot: Boolean(p.is_hot),
+      is_recommend: Boolean(p.is_recommend),
+      status: Boolean(p.status)
+    }))
+  }
+
+  getStallDailySales(stallId, date) {
+    const result = this.db.prepare(`
+      SELECT 
+        COUNT(DISTINCT o.order_no) as order_count,
+        COALESCE(SUM(oi.subtotal), 0) as total_amount,
+        COALESCE(SUM(oi.stall_amount), 0) as stall_amount,
+        COALESCE(SUM(oi.platform_amount), 0) as platform_amount
+      FROM order_items oi
+      LEFT JOIN orders o ON oi.order_no = o.order_no
+      WHERE oi.stall_id = ? AND o.pay_status = 1 AND DATE(o.paid_at) = DATE(?)
+    `).get(stallId, date)
+
+    return {
+      orderCount: result.order_count || 0,
+      totalAmount: result.total_amount || 0,
+      stallAmount: result.stall_amount || 0,
+      platformAmount: result.platform_amount || 0
+    }
   }
 
   close() {

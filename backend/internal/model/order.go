@@ -41,6 +41,7 @@ type OrderItem struct {
 	OrderID         uint            `gorm:"not null;index" json:"order_id"`
 	ProductID       uint            `gorm:"not null" json:"product_id"`
 	SKUID           uint            `gorm:"not null" json:"sku_id"`
+	StallID         uint            `gorm:"index" json:"stall_id"`
 	ProductName     string          `gorm:"size:100;not null" json:"product_name"`
 	SKUName         string          `gorm:"size:100;not null" json:"sku_name"`
 	AttributeValues string          `gorm:"size:500" json:"attribute_values"`
@@ -48,10 +49,13 @@ type OrderItem struct {
 	Price           decimal.Decimal `gorm:"type:decimal(10,2);not null" json:"price"`
 	Quantity        int             `gorm:"not null" json:"quantity"`
 	Subtotal        decimal.Decimal `gorm:"type:decimal(10,2);not null" json:"subtotal"`
+	StallAmount     decimal.Decimal `gorm:"type:decimal(10,2);default:0" json:"stall_amount"`
+	PlatformAmount  decimal.Decimal `gorm:"type:decimal(10,2);default:0" json:"platform_amount"`
 	Status          int             `gorm:"default:1" json:"status"`
 	PrintStatus     int             `gorm:"default:0" json:"print_status"`
 	CookStatus      int             `gorm:"default:0" json:"cook_status"`
 	Order           Order           `gorm:"foreignKey:OrderID" json:"order,omitempty"`
+	Stall           *Stall          `gorm:"foreignKey:StallID" json:"stall,omitempty"`
 }
 
 type OrderPayment struct {

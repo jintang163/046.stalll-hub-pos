@@ -285,3 +285,33 @@ func (r *OrderRepository) BatchCreateOrders(orders []model.Order) error {
 		return nil
 	})
 }
+
+func (r *OrderRepository) GetPaidOrdersByStallAndDate(stallID uint, date string) ([]model.Order, error) {
+	var orders []model.Order
+	err := r.db.Preload("Items").
+		Where("pay_status = 1 AND DATE(created_at) = ?", date).
+		Where("id IN (SELECT DISTINCT order_id FROM order_items WHERE stall_id = ?)", stallID).
+		Order("id ASC").
+		Find(&orders).Error
+	return orders, err
+}
+
+func (r *OrderRepository) GetOrdersByStall(stallID uint, page, pageSize int) ([]model.Order, int64, error) {
+	var orders []model.Order
+	var total int64
+
+	db := r.db.Model(&model.Order{}).
+		Where("id IN (SELECT DISTINCT order_id FROM order_items WHERE stall_id = ?)", stallID)
+
+	if err := db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * pageSize
+	err := db.Preload("Items").Preload("Store").
+		Order("id DESC").
+		Offset(offset).Limit(pageSize).
+		Find(&orders).Error
+
+	return orders, total, err
+}

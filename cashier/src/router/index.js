@@ -24,6 +24,18 @@ const routes = [
     name: 'Settings',
     component: () => import('@/views/settings/index.vue'),
     meta: { title: '系统设置' }
+  },
+  {
+    path: '/stall-cashier',
+    name: 'StallCashier',
+    component: () => import('@/views/stall-cashier/index.vue'),
+    meta: { title: '摊位收银' }
+  },
+  {
+    path: '/stall-report',
+    name: 'StallReport',
+    component: () => import('@/views/stall-report/index.vue'),
+    meta: { title: '摊位报表' }
   }
 ]
 
