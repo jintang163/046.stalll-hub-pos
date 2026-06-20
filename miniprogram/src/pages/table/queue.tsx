@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { View, Text, Input, ScrollView } from '@tarojs/components'
-import Taro, { useDidShow, usePullDownRefresh } from '@tarojs/taro'
+import Taro, { useDidShow, usePullDownRefresh, useDidHide } from '@tarojs/taro'
 import { Tabs, TabPane, Loading, Dialog } from '@nutui/nutui-react-taro'
 import { queueApi } from '../../services/table'
 import type { QueueItem } from '../../services/table'
 import { getCurrentStore } from '../../services/store'
 import type { Store } from '../../services/store'
 import { isLogin } from '../../services/auth'
+import { queue2Service, type QueueMessage } from '../../services/queue2'
 import classNames from 'classnames'
 import dayjs from 'dayjs'
 import styles from './queue.module.scss'
@@ -47,9 +48,14 @@ const QueuePage: React.FC = () => {
   useDidShow(() => {
     if (isLogin()) {
       loadData()
+      startWebSocket()
     } else {
       Taro.navigateTo({ url: '/pages/user/index' })
     }
+  })
+
+  useDidHide(() => {
+    stopWebSocket()
   })
 
   usePullDownRefresh(() => {
@@ -95,6 +101,34 @@ const QueuePage: React.FC = () => {
     refreshTimerRef.current = setInterval(() => {
       loadMyQueues()
     }, 30000)
+  }
+
+  const startWebSocket = () => {
+    const storeId = store?.id || 1
+    queue2Service.connectWebSocket(storeId)
+    queue2Service.addListener(handleWsMessage)
+  }
+
+  const stopWebSocket = () => {
+    queue2Service.removeListener(handleWsMessage)
+    queue2Service.disconnectWebSocket()
+  }
+
+  const handleWsMessage = (msg: QueueMessage) => {
+    console.log('[WS] received:', msg)
+    if (msg.type === 'call' && msg.queueNumber) {
+      const activeQueue = myQueues.find(q => q.status === 0 || q.status === 1)
+      if (activeQueue && activeQueue.queueNumber === msg.queueNumber) {
+        triggerCallingNotification(activeQueue)
+        loadMyQueues()
+      }
+    }
+    if (msg.type === 'arrive') {
+      loadMyQueues()
+    }
+    if (msg.type === 'cancel') {
+      loadMyQueues()
+    }
   }
 
   const stopTimers = () => {
@@ -253,6 +287,12 @@ const QueuePage: React.FC = () => {
   const handleRequeue = () => {
     setTabValue(0)
     setShowSuccessPopup(false)
+  }
+
+  const handlePreOrder = () => {
+    const activeQueue = myQueues.find(q => q.status === 0 || q.status === 1)
+    if (!activeQueue) return
+    Taro.showToast({ title: '预点餐功能开发中', icon: 'none' })
   }
 
   const formatWaitedTime = (seconds: number): string => {
@@ -497,6 +537,14 @@ const QueuePage: React.FC = () => {
                           onClick={() => handleCancelQueue(activeQueue)}
                         >
                           <Text>取消排队</Text>
+                        </View>
+                      )}
+                      {activeQueue.status === 0 && (
+                        <View
+                          className={classNames(styles.actionBtn, styles.actionBtnWarning)}
+                          onClick={handlePreOrder}
+                        >
+                          <Text>预点餐</Text>
                         </View>
                       )}
                       <View

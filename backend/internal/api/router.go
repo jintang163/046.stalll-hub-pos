@@ -33,6 +33,7 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 	pointsRuleHandler := handler.NewPointsRuleHandler()
 	rechargeActivityHandler := handler.NewRechargeActivityHandler()
 	stallHandler := handler.NewStallHandler()
+	queueHandler := handler.NewQueueHandler()
 
 	orderHandler := handler.NewOrderHandler(nil)
 
@@ -372,6 +373,21 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 			stallReports.GET("/daily", stallHandler.GetDailyReport)
 			stallReports.POST("/daily/generate", stallHandler.GenerateDailyReport)
 		}
+
+		queue2 := api.Group("/queue2")
+		{
+			queue2.POST("/take", queueHandler.TakeNumber)
+			queue2.GET("/info", queueHandler.GetQueueInfo)
+			queue2.GET("/all-waiting", middleware.JWTAuth(), queueHandler.GetAllWaiting)
+			queue2.POST("/call", middleware.JWTAuth(), queueHandler.CallNumber)
+			queue2.POST("/arrive", middleware.JWTAuth(), queueHandler.Arrive)
+			queue2.POST("/cancel", queueHandler.Cancel)
+			queue2.GET("/config", queueHandler.GetQueueConfig)
+			queue2.POST("/preorder", queueHandler.SavePreOrder)
+			queue2.GET("/preorder", queueHandler.GetPreOrder)
+		}
+
+		api.GET("/queue/ws", queueHandler.WebSocket)
 	}
 
 	return r
