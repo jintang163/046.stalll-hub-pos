@@ -1,0 +1,25 @@
+{
+  "name": "kitchen-display",
+  "version": "1.0.0",
+  "description": "厨师端显示屏 - 厨房电视菜品制作展示",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview --port 4173"
+  },
+  "dependencies": {
+    "vue": "^3.4.21",
+    "pinia": "^2.1.7",
+    "axios": "^1.6.8",
+    "element-plus": "^2.7.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.4",
+    "typescript": "^5.4.5",
+    "vite": "5.2.8",
+    "vue-tsc": "^2.0.13",
+    "sass": "^1.75.0"
+  }
+}
