@@ -39,6 +39,7 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 	analyticsHandler := handler.NewAnalyticsHandler()
 	ingredientHandler := handler.NewIngredientHandler()
 	deliveryHandler := handler.NewDeliveryHandler()
+	forecastHandler := handler.NewForecastHandler()
 
 	orderHandler := handler.NewOrderHandler(nil)
 
@@ -495,6 +496,26 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 		{
 			amap.POST("/route", deliveryHandler.PlanRoute)
 			amap.POST("/geocode", deliveryHandler.Geocode)
+		}
+
+		forecast := api.Group("/forecast")
+		forecast.Use(middleware.JWTAuth())
+		{
+			forecast.GET("/store/:storeId", forecastHandler.GetForecast)
+			forecast.GET("/store/:storeId/stocking", forecastHandler.GetStockingSuggestion)
+			forecast.POST("/store/:storeId/purchase", forecastHandler.GeneratePurchaseOrder)
+			forecast.POST("/store/:storeId/trigger", forecastHandler.TriggerForecastTask)
+		}
+
+		purchases := api.Group("/purchases")
+		purchases.Use(middleware.JWTAuth())
+		{
+			purchases.GET("", forecastHandler.GetPurchaseList)
+			purchases.GET("/:id", forecastHandler.GetPurchaseDetail)
+			purchases.POST("", forecastHandler.CreatePurchaseOrder)
+			purchases.PUT("/:id/status", forecastHandler.UpdatePurchaseStatus)
+			purchases.POST("/:id/send", forecastHandler.SendPurchaseToSupplier)
+			purchases.GET("/:id/export", forecastHandler.ExportPurchaseExcel)
 		}
 	}
 

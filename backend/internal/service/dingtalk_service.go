@@ -196,3 +196,55 @@ func (s *DingTalkService) SendStockCheckComplete(checkNo, title string, totalSKU
 
 	return s.SendMarkdown(titleMsg, text, false, nil)
 }
+
+func (s *DingTalkService) SendPurchaseOrderNotification(purchase *model.PurchaseOrder, excelPath string) error {
+	title := fmt.Sprintf("【采购单】%s", purchase.PurchaseNo)
+	text := fmt.Sprintf("## 📦 新采购单通知\n\n"+
+		"- **采购单号**：%s\n"+
+		"- **供应商**：%s\n"+
+		"- **联系电话**：%s\n"+
+		"- **采购日期**：%s\n"+
+		"- **商品数量**：%d种\n"+
+		"- **采购总金额**：%s元\n"+
+		"- **采购总数量**：%d\n"+
+		"- **生成方式**：销量预测自动生成\n\n",
+		purchase.PurchaseNo,
+		purchase.SupplierName,
+		purchase.SupplierPhone,
+		purchase.CreatedAt.Format("2006-01-02 15:04"),
+		purchase.ItemCount,
+		purchase.TotalAmount.String(),
+		purchase.TotalQuantity,
+	)
+
+	if len(purchase.Items) > 0 {
+		text += "### 采购明细（前5项）\n\n"
+		text += "| 食材名称 | 分类 | 数量 | 单位 | 金额 |\n"
+		text += "|------|-----|------|------|------|\n"
+
+		for i, item := range purchase.Items {
+			if i >= 5 {
+				text += fmt.Sprintf("| ... 还有 %d 项 ... | | | | |\n", len(purchase.Items)-5)
+				break
+			}
+			text += fmt.Sprintf("| %s | %s | %s | %s | %s |\n",
+				item.IngredientName, item.Category,
+				item.PurchaseQty.String(), item.Unit,
+				item.Subtotal.String())
+		}
+		text += "\n"
+	}
+
+	if purchase.Remark != "" {
+		text += fmt.Sprintf("> 备注：%s\n\n", purchase.Remark)
+	}
+
+	if excelPath != "" {
+		text += "📎 采购单Excel已生成，请查看附件。\n"
+	}
+
+	text += "⚠️ 请及时确认并安排发货。"
+
+	log.Printf("[DingTalk] Sending purchase order notification for %s", purchase.PurchaseNo)
+	return s.SendMarkdown(title, text, false, nil)
+}

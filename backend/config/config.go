@@ -23,6 +23,7 @@ type Config struct {
 	Amap        AmapConfig        `mapstructure:"amap"`
 	Meituan     MeituanConfig     `mapstructure:"meituan"`
 	Eleme       ElemeConfig       `mapstructure:"eleme"`
+	Forecast    ForecastConfig    `mapstructure:"forecast"`
 }
 
 type AmapConfig struct {
@@ -43,6 +44,14 @@ type ElemeConfig struct {
 	AppSecret string `mapstructure:"app_secret"`
 	BaseURL   string `mapstructure:"base_url"`
 	Enabled   bool   `mapstructure:"enabled"`
+}
+
+type ForecastConfig struct {
+	BaseURL        string  `mapstructure:"base_url"`
+	ForecastDays   int     `mapstructure:"forecast_days"`
+	HistoryDays    int     `mapstructure:"history_days"`
+	SafetyStockRatio float64 `mapstructure:"safety_stock_ratio"`
+	SendToDingTalk bool `mapstructure:"send_to_dingtalk"`
 }
 
 type ClickHouseConfig struct {

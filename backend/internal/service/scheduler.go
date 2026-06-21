@@ -12,6 +12,8 @@ type SchedulerService struct {
 	promotionService *PromotionEngineService
 	stallService     *StallService
 	dingTalk         *DingTalkService
+	forecastService  *ForecastService
+	purchaseService  *PurchaseService
 }
 
 func NewSchedulerService() *SchedulerService {
@@ -20,6 +22,8 @@ func NewSchedulerService() *SchedulerService {
 		promotionService: NewPromotionEngineService(),
 		stallService:     NewStallService(),
 		dingTalk:         NewDingTalkService(),
+		forecastService:  NewForecastService(),
+		purchaseService:  NewPurchaseService(),
 	}
 }
 
@@ -298,4 +302,68 @@ func (s *SchedulerService) checkStockWarnings() {
 			go s.dingTalk.SendStockWarning(warnings, store.Name)
 		}
 	}
+}
+
+func (s *SchedulerService) StartForecastScheduler() {
+	go s.runForecastScheduler()
+	log.Println("[Scheduler] Forecast scheduler started")
+}
+
+func (s *SchedulerService) runForecastScheduler() {
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+
+	go s.runDailyForecast()
+
+	for range ticker.C {
+		now := time.Now()
+		if now.Hour() == 3 {
+			s.runDailyForecast()
+		}
+	}
+}
+
+func (s *SchedulerService) runDailyForecast() {
+	log.Println("[Forecast] Starting daily forecast task...")
+
+	var stores []model.Store
+	if err := database.DB.Where("status = 1").Find(&stores).Error; err != nil {
+		log.Printf("[Forecast] Failed to fetch stores: %v", err)
+		return
+	}
+
+	for _, store := range stores {
+		go func(store model.Store) {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("[Forecast] Panic in store %d forecast: %v", store.ID, r)
+				}
+			}()
+
+			forecast, err := s.forecastService.GetStoreForecast(store.ID, 0, 0)
+			if err != nil {
+				log.Printf("[Forecast] Store %d forecast failed: %v", store.ID, err)
+				return
+			}
+
+			suggestions, err := s.forecastService.CalculateStockingSuggestion(store.ID, forecast)
+			if err != nil {
+				log.Printf("[Forecast] Store %d stocking suggestion failed: %v", store.ID, err)
+				return
+			}
+
+			purchase, err := s.purchaseService.AutoGenerateFromForecast(
+				store.ID, forecast, suggestions, "系统自动采购",
+			)
+			if err != nil {
+				log.Printf("[Forecast] Store %d auto generate purchase order failed: %v", store.ID, err)
+				return
+			}
+
+			log.Printf("[Forecast] Store %s: generated purchase order %s, %d items, total: %s",
+				store.Name, purchase.PurchaseNo, purchase.ItemCount, purchase.TotalAmount.String())
+		}(store)
+	}
+
+	log.Println("[Forecast] Daily forecast tasks submitted")
 }

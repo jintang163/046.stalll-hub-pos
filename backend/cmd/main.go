@@ -82,6 +82,9 @@ func main() {
 		&model.PickupCode{},
 		&model.Rider{},
 		&model.DeliveryTracking{},
+		&model.PurchaseOrder{},
+		&model.PurchaseOrderItem{},
+		&model.SalesForecast{},
 	)
 
 	initDefaultData()
@@ -97,6 +100,8 @@ func main() {
 	initInventorySync()
 
 	initCostAlert()
+
+	initForecastScheduler()
 
 	r := api.SetupRouter(database.DB, nsq.Producer)
 
@@ -267,4 +272,18 @@ func initCostAlert() {
 		config.AppConfig.CostAlert.PriceChangeThreshold,
 		config.AppConfig.CostAlert.CooldownHours,
 		config.AppConfig.CostAlert.OperatingExpenseRate)
+}
+
+func initForecastScheduler() {
+	if config.AppConfig.Forecast.BaseURL == "" {
+		log.Println("[Config] forecast.base_url not configured, forecast scheduler disabled")
+		return
+	}
+
+	scheduler := service.NewSchedulerService()
+	scheduler.StartForecastScheduler()
+
+	log.Printf("[Forecast] Scheduler started, forecast_days=%d, history_days=%d",
+		config.AppConfig.Forecast.ForecastDays,
+		config.AppConfig.Forecast.HistoryDays)
 }

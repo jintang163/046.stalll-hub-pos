@@ -82,4 +82,11 @@ eleme:
   base_url: "https://open.ele.me/api/v1"
   enabled: false
 
+forecast:
+  base_url: "http://127.0.0.1:8010"
+  forecast_days: 3
+  history_days: 90
+  safety_stock_ratio: 1.2
+  send_to_dingtalk: true
+
 
