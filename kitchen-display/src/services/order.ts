@@ -16,30 +16,10 @@ export const orderApi = {
   },
 
   getOrderItemsByCookStatus: (storeId: number, cookStatus: number): Promise<OrderItem[]> => {
-    return request.get('/orders', {
+    return request.get<{ list: OrderItem[]; total: number }>('/waiter/order-items/by-cook-status', {
       store_id: storeId,
-      order_status: 1,
-      cook_status: cookStatus,
-      page_size: 200
-    }).then(res => {
-      const items: OrderItem[] = []
-      res.list.forEach((order: any) => {
-        if (order.items) {
-          order.items.forEach((item: OrderItem) => {
-            if (item.cook_status === cookStatus) {
-              items.push({
-                ...item,
-                order_id: order.id,
-                order_no: order.order_no,
-                table_no: order.table_no,
-                remark: order.remark
-              })
-            }
-          })
-        }
-      })
-      return items
-    })
+      cook_status: cookStatus
+    }).then(res => res.list)
   },
 
   updateCookStatus: (data: CookStatusUpdateRequest): Promise<void> => {

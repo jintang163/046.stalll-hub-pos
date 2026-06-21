@@ -64,7 +64,11 @@ export const useKitchenStore = defineStore('kitchen', () => {
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
   })
 
-  const overdueCount = computed(() => pendingItemsWithMeta.value.filter(i => i.isOverdue).length)
+  const overdueCount = computed(() => {
+    const pendingOverdue = pendingItemsWithMeta.value.filter(i => i.isOverdue).length
+    const cookingOverdue = cookingItemsWithMeta.value.filter(i => i.isOverdue).length
+    return pendingOverdue + cookingOverdue
+  })
 
   const totalPending = computed(() => pendingItems.value.length)
   const totalCooking = computed(() => cookingItems.value.length)
@@ -183,21 +187,25 @@ export const useKitchenStore = defineStore('kitchen', () => {
   }
 
   const handleNewOrder = (msg: WSMessage) => {
-    if (msg.items) {
+    if (msg.items && msg.items.length > 0) {
       msg.items.forEach(item => {
         if (item.cook_status === 0 || item.cook_status === 1) {
           addOrUpdateItem(item)
         }
       })
+    } else {
+      loadInitialData()
     }
     playAlert('new')
   }
 
   const handleOrderUpdate = (msg: WSMessage) => {
-    if (msg.items) {
+    if (msg.items && msg.items.length > 0) {
       msg.items.forEach(item => {
         addOrUpdateItem(item)
       })
+    } else {
+      loadInitialData()
     }
   }
 

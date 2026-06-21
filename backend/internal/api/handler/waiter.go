@@ -55,6 +55,86 @@ type UpdateCookStatusRequest struct {
 	CookStatus   int    `json:"cook_status" binding:"required,oneof=0 1 2 3"`
 }
 
+type CookItemResponse struct {
+	ID              uint   `json:"id"`
+	OrderID         uint   `json:"order_id"`
+	ProductID       uint   `json:"product_id"`
+	SKUID           uint   `json:"sku_id"`
+	ProductName     string `json:"product_name"`
+	SKUName         string `json:"sku_name"`
+	AttributeValues string `json:"attribute_values"`
+	Image           string `json:"image"`
+	Price           string `json:"price"`
+	Quantity        int    `json:"quantity"`
+	Subtotal        string `json:"subtotal"`
+	Status          int    `json:"status"`
+	PrintStatus     int    `json:"print_status"`
+	CookStatus      int    `json:"cook_status"`
+	TableNo         string `json:"table_no"`
+	OrderNo         string `json:"order_no"`
+	Remark          string `json:"remark"`
+	CreatedAt       string `json:"created_at"`
+}
+
+func (h *WaiterHandler) GetPendingCookItems(c *gin.Context) {
+	storeID, _ := strconv.ParseUint(c.Query("store_id"), 10, 32)
+	cookStatus, _ := strconv.Atoi(c.DefaultQuery("cook_status", "0"))
+
+	if storeID == 0 {
+		middleware.Error(c, http.StatusBadRequest, "store_id required")
+		return
+	}
+
+	type rawItem struct {
+		model.OrderItem
+		TableNo string `gorm:"column:table_no" json:"table_no"`
+		OrderNo string `gorm:"column:order_no" json:"order_no"`
+		Remark  string `gorm:"column:remark" json:"remark"`
+	}
+
+	var rawItems []rawItem
+	err := database.DB.Table("order_items AS oi").
+		Select("oi.*, o.table_no AS table_no, o.order_no AS order_no, o.remark AS remark").
+		Joins("INNER JOIN orders AS o ON o.id = oi.order_id").
+		Where("o.store_id = ? AND oi.cook_status = ? AND o.order_status IN (1,2,3)", storeID, cookStatus).
+		Order("oi.created_at ASC").
+		Limit(200).
+		Scan(&rawItems).Error
+	if err != nil {
+		middleware.Error(c, http.StatusInternalServerError, "Failed to query cook items: "+err.Error())
+		return
+	}
+
+	result := make([]CookItemResponse, 0, len(rawItems))
+	for _, ri := range rawItems {
+		result = append(result, CookItemResponse{
+			ID:              ri.ID,
+			OrderID:         ri.OrderID,
+			ProductID:       ri.ProductID,
+			SKUID:           ri.SKUID,
+			ProductName:     ri.ProductName,
+			SKUName:         ri.SKUName,
+			AttributeValues: ri.AttributeValues,
+			Image:           ri.Image,
+			Price:           ri.Price.String(),
+			Quantity:        ri.Quantity,
+			Subtotal:        ri.Subtotal.String(),
+			Status:          ri.Status,
+			PrintStatus:     ri.PrintStatus,
+			CookStatus:      ri.CookStatus,
+			TableNo:         ri.TableNo,
+			OrderNo:         ri.OrderNo,
+			Remark:          ri.Remark,
+			CreatedAt:       ri.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		})
+	}
+
+	middleware.Success(c, gin.H{
+		"list":  result,
+		"total": len(result),
+	})
+}
+
 func (h *WaiterHandler) UpdateItemCookStatus(c *gin.Context) {
 	var req UpdateCookStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -349,13 +429,39 @@ func (h *WaiterHandler) publishOrderUpdate(orderID uint) {
 		return
 	}
 
+	items := make([]map[string]interface{}, 0, len(order.Items))
+	for _, item := range order.Items {
+		items = append(items, map[string]interface{}{
+			"id":               item.ID,
+			"order_id":         item.OrderID,
+			"product_id":       item.ProductID,
+			"sku_id":           item.SKUID,
+			"product_name":     item.ProductName,
+			"sku_name":         item.SKUName,
+			"attribute_values": item.AttributeValues,
+			"image":            item.Image,
+			"price":            item.Price.String(),
+			"quantity":         item.Quantity,
+			"subtotal":         item.Subtotal.String(),
+			"status":           item.Status,
+			"print_status":     item.PrintStatus,
+			"cook_status":      item.CookStatus,
+			"table_no":         order.TableNo,
+			"order_no":         order.OrderNo,
+			"remark":           order.Remark,
+			"created_at":       item.CreatedAt,
+		})
+	}
+
 	msg := map[string]interface{}{
 		"type":      "order_update",
 		"order_id":  orderID,
 		"order_no":  order.OrderNo,
 		"store_id":  order.StoreID,
 		"table_no":  order.TableNo,
+		"remark":    order.Remark,
 		"item_count": len(order.Items),
+		"items":     items,
 	}
 	msgData, _ := json.Marshal(msg)
 	_ = redis.Publish("waiter:order:"+strconv.FormatUint(uint64(order.StoreID), 10), string(msgData))
@@ -366,15 +472,41 @@ func PublishNewOrderNotification(order *model.Order) {
 		return
 	}
 
+	items := make([]map[string]interface{}, 0, len(order.Items))
+	for _, item := range order.Items {
+		items = append(items, map[string]interface{}{
+			"id":               item.ID,
+			"order_id":         item.OrderID,
+			"product_id":       item.ProductID,
+			"sku_id":           item.SKUID,
+			"product_name":     item.ProductName,
+			"sku_name":         item.SKUName,
+			"attribute_values": item.AttributeValues,
+			"image":            item.Image,
+			"price":            item.Price.String(),
+			"quantity":         item.Quantity,
+			"subtotal":         item.Subtotal.String(),
+			"status":           item.Status,
+			"print_status":     item.PrintStatus,
+			"cook_status":      item.CookStatus,
+			"table_no":         order.TableNo,
+			"order_no":         order.OrderNo,
+			"remark":           order.Remark,
+			"created_at":       item.CreatedAt,
+		})
+	}
+
 	msg := map[string]interface{}{
-		"type":      "new_order",
-		"order_id":  order.ID,
-		"order_no":  order.OrderNo,
-		"store_id":  order.StoreID,
-		"table_no":  order.TableNo,
+		"type":       "new_order",
+		"order_id":   order.ID,
+		"order_no":   order.OrderNo,
+		"store_id":   order.StoreID,
+		"table_no":   order.TableNo,
+		"remark":     order.Remark,
 		"item_count": len(order.Items),
 		"pay_amount": order.PayAmount.String(),
 		"created_at": order.CreatedAt,
+		"items":      items,
 	}
 	msgData, _ := json.Marshal(msg)
 	_ = redis.Publish("waiter:order:"+strconv.FormatUint(uint64(order.StoreID), 10), string(msgData))

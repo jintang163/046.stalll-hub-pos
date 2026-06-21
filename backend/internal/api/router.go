@@ -529,6 +529,7 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 		{
 			waiter.GET("/stats", waiterHandler.GetWaiterStats)
 			waiter.GET("/tables", waiterHandler.GetTablesWithStatus)
+			waiter.GET("/order-items/by-cook-status", waiterHandler.GetPendingCookItems)
 			waiter.PUT("/order-items/cook-status", waiterHandler.UpdateItemCookStatus)
 			waiter.POST("/order-items/serve", waiterHandler.MarkItemsServed)
 			waiter.POST("/orders/:id/items", waiterHandler.AddOrderItems)
