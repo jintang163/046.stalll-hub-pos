@@ -72,6 +72,7 @@ func main() {
 		&model.StallDailyReport{},
 		&model.StockCheck{},
 		&model.StockCheckItem{},
+		&model.FacePaymentRecord{},
 		&model.ProductCost{},
 		&model.CostImportBatch{},
 		&model.ProfitReport{},

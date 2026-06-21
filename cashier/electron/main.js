@@ -4,6 +4,7 @@ const Database = require('./database')
 const NSQClient = require('./nsq')
 const IPC = require('./ipc')
 const Store = require('electron-store')
+const { initFacePaymentIPC, voiceBroadcastService } = require('./face-payment')
 
 let mainWindow = null
 let db = null
@@ -99,8 +100,10 @@ app.whenReady().then(() => {
   initDatabase()
   
   IPC.init(ipcMain, db, mainWindow, nsq, store, app)
-  
+
   createWindow()
+
+  initFacePaymentIPC(ipcMain, mainWindow)
 
   if (mainWindow) {
     initNSQ()

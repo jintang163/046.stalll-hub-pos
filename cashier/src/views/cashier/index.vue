@@ -207,10 +207,22 @@
               <el-radio-button value="wechat">微信</el-radio-button>
               <el-radio-button value="alipay">支付宝</el-radio-button>
               <el-radio-button value="card">刷卡</el-radio-button>
+              <el-radio-button value="face">刷脸</el-radio-button>
             </el-radio-group>
           </el-form-item>
+
+          <el-form-item v-if="payMethod === 'face'" label="刷脸设备">
+            <div class="face-device-info">
+              <el-tag :type="faceDeviceStatus.alipay?.connected ? 'success' : 'info'" size="small">
+                蜻蜓: {{ faceDeviceStatus.alipay?.connected ? '已连接' : '未连接' }}
+              </el-tag>
+              <el-tag :type="faceDeviceStatus.wechat?.connected ? 'success' : 'info'" size="small" style="margin-left: 8px;">
+                微信刷脸: {{ faceDeviceStatus.wechat?.connected ? '已连接' : '未连接' }}
+              </el-tag>
+            </div>
+          </el-form-item>
           
-          <el-form-item label="优惠金额">
+          <el-form-item v-if="payMethod !== 'face'" label="优惠金额">
             <el-input-number 
               v-model="discountInput" 
               :min="0" 
@@ -231,7 +243,7 @@
           </el-form-item>
         </el-form>
 
-        <div class="payment-summary">
+        <div class="payment-summary" v-if="payMethod !== 'face'">
           <div class="row">
             <span>原价:</span>
             <span>¥{{ cartStore.total.toFixed(2) }}</span>
@@ -250,14 +262,35 @@
       <template #footer>
         <el-button @click="paymentVisible = false">取消</el-button>
         <el-button 
+          v-if="payMethod === 'face'"
           type="primary" 
           size="large"
+          :disabled="cartStore.items.length === 0"
+          @click="openFacePayment"
+        >
+          刷脸收款
+        </el-button>
+        <el-button 
+          v-else
+          type="primary" 
+          size="large"
+          :disabled="cartStore.items.length === 0"
           @click="handleSubmitOrder"
         >
           确认收款
         </el-button>
       </template>
     </el-dialog>
+
+    <face-payment-dialog
+      v-model="facePaymentVisible"
+      :order-id="pendingOrderId"
+      :order-no="pendingOrderNo"
+      :amount="cartStore.actualTotal"
+      :store-id="currentStoreId"
+      @success="handleFacePaymentSuccess"
+      @fail="handleFacePaymentFail"
+    />
 
     <el-dialog v-model="showSync" title="数据同步" width="500px">
       <div class="sync-dialog">
@@ -315,6 +348,7 @@ import { useCartStore } from '@/store/cart'
 import { useOrderStore } from '@/store/order'
 import { useSyncStore } from '@/store/sync'
 import SKUSelector from '@/components/SKUSelector.vue'
+import FacePaymentDialog from '@/components/FacePaymentDialog.vue'
 import dayjs from 'dayjs'
 
 const router = useRouter()
@@ -331,6 +365,11 @@ const paymentVisible = ref(false)
 const showSync = ref(false)
 const payMethod = ref('cash')
 const discountInput = ref(0)
+const facePaymentVisible = ref(false)
+const pendingOrderId = ref(0)
+const pendingOrderNo = ref('')
+const currentStoreId = ref(1)
+const faceDeviceStatus = ref({ alipay: null, wechat: null })
 
 const loadData = async () => {
   await productStore.loadCategories()
@@ -395,7 +434,9 @@ const clearCart = async () => {
 
 const openPayment = () => {
   discountInput.value = 0
+  payMethod.value = 'cash'
   paymentVisible.value = true
+  loadFaceDeviceStatus()
 }
 
 const handleSubmitOrder = async () => {
@@ -420,6 +461,56 @@ const handleSubmitOrder = async () => {
     console.error('创建订单失败:', e)
     ElMessage.error('创建订单失败: ' + e.message)
   }
+}
+
+const openFacePayment = async () => {
+  try {
+    cartStore.applyDiscount(0)
+    
+    const order = await orderStore.createOrder(cartStore, {
+      pay_method: 'face',
+      paid: false,
+      table_no: cartStore.tableNo,
+      remark: cartStore.remark
+    })
+    
+    pendingOrderId.value = order.order_id || order.id
+    pendingOrderNo.value = order.order_no
+    paymentVisible.value = false
+    facePaymentVisible.value = true
+    
+    if (window.electronAPI?.app) {
+      const config = await window.electronAPI.app.getConfig()
+      currentStoreId.value = config.storeID || 1
+    }
+  } catch (e) {
+    console.error('创建刷脸支付订单失败:', e)
+    ElMessage.error('创建订单失败: ' + e.message)
+  }
+}
+
+const loadFaceDeviceStatus = async () => {
+  if (window.electronAPI?.facePayment) {
+    try {
+      faceDeviceStatus.value = await window.electronAPI.facePayment.getDeviceStatus()
+    } catch (e) {
+      console.error('Get face device status failed:', e)
+    }
+  }
+}
+
+const handleFacePaymentSuccess = (result) => {
+  ElMessage.success(`刷脸支付成功！订单 ${result.order_no}`)
+  facePaymentVisible.value = false
+  cartStore.clear()
+  
+  if (window.electronAPI?.voice) {
+    window.electronAPI.voice.speakPaymentSuccess(cartStore.actualTotal, result.pay_method)
+  }
+}
+
+const handleFacePaymentFail = (result) => {
+  ElMessage.error(`刷脸支付失败: ${result.error}`)
 }
 
 const handleSyncOrders = () => {
@@ -796,6 +887,11 @@ onMounted(() => {
       font-size: 42px;
       font-weight: 700;
     }
+  }
+  
+  .face-device-info {
+    display: flex;
+    align-items: center;
   }
   
   .payment-summary {

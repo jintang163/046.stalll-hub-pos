@@ -41,6 +41,7 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 	deliveryHandler := handler.NewDeliveryHandler()
 	forecastHandler := handler.NewForecastHandler()
 	waiterHandler := handler.NewWaiterHandler()
+	facePaymentHandler := handler.NewFacePaymentHandler()
 
 	orderHandler := handler.NewOrderHandler(nil)
 
@@ -534,6 +535,21 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 
 		api.POST("/waiter/call", waiterHandler.CallWaiter)
 		api.GET("/waiter/ws", waiterHandler.WebSocket)
+
+		facePayment := api.Group("/face-payment")
+		facePayment.Use(middleware.JWTAuth())
+		{
+			facePayment.POST("/init", facePaymentHandler.FacePaymentInit)
+			facePayment.POST("/confirm", facePaymentHandler.FacePaymentConfirm)
+			facePayment.GET("/:id/status", facePaymentHandler.FacePaymentQuery)
+			facePayment.POST("/:id/cancel", facePaymentHandler.FacePaymentCancel)
+		}
+
+		voice := api.Group("/voice")
+		voice.Use(middleware.JWTAuth())
+		{
+			voice.POST("/broadcast", facePaymentHandler.VoiceBroadcast)
+		}
 	}
 
 	return r

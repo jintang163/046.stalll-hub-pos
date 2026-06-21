@@ -51,3 +51,23 @@ type WechatRefundResponse struct {
 	RefundRecvAccout string `json:"refund_recv_accout"`
 	SuccessTime  string `json:"success_time"`
 }
+
+type FacePaymentInitRequest struct {
+	StoreID  uint   `json:"store_id" binding:"required"`
+	OrderID  uint   `json:"order_id" binding:"required"`
+	Provider string `json:"provider" binding:"required"`
+	DeviceID string `json:"device_id"`
+}
+
+type FacePaymentConfirmRequest struct {
+	FacePaymentID string `json:"face_payment_id" binding:"required"`
+	Provider      string `json:"provider" binding:"required"`
+	AuthCode      string `json:"auth_code" binding:"required"`
+	OpenID        string `json:"open_id"`
+}
+
+type VoiceBroadcastRequest struct {
+	StoreID uint   `json:"store_id" binding:"required"`
+	Text    string `json:"text" binding:"required"`
+	Type    string `json:"type" binding:"required"`
+}

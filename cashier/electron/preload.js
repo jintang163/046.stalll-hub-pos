@@ -11,7 +11,8 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
       'nsq:category:deleted',
       'nsq:stock:updated',
       'nsq:order:updated',
-      'nsq:message'
+      'nsq:message',
+      'voice:speak'
     ]
     if (validChannels.includes(channel)) {
       ipcRenderer.on(channel, (event, ...args) => callback(...args))
@@ -92,5 +93,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
     quit: () => ipcRenderer.invoke('app:quit'),
     reload: () => ipcRenderer.invoke('app:reload'),
     openDevTools: () => ipcRenderer.invoke('app:openDevTools')
+  },
+  
+  facePayment: {
+    initAlipay: (config) => ipcRenderer.invoke('face-payment:initAlipay', config),
+    initWechat: (config) => ipcRenderer.invoke('face-payment:initWechat', config),
+    startAuth: (provider, authInfo) => ipcRenderer.invoke('face-payment:startAuth', provider, authInfo),
+    cancelAuth: () => ipcRenderer.invoke('face-payment:cancelAuth'),
+    getDeviceStatus: () => ipcRenderer.invoke('face-payment:getDeviceStatus')
+  },
+  
+  voice: {
+    speak: (text, options) => ipcRenderer.invoke('voice:speak', text, options),
+    speakPaymentSuccess: (amount, payMethod) => ipcRenderer.invoke('voice:speakPaymentSuccess', amount, payMethod),
+    speakPaymentFailed: () => ipcRenderer.invoke('voice:speakPaymentFailed'),
+    speakRefund: (amount) => ipcRenderer.invoke('voice:speakRefund', amount),
+    setEnabled: (enabled) => ipcRenderer.invoke('voice:setEnabled', enabled),
+    setVolume: (volume) => ipcRenderer.invoke('voice:setVolume', volume),
+    getStatus: () => ipcRenderer.invoke('voice:getStatus')
   }
 })

@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/shopspring/decimal"
+	"gorm.io/gorm"
 )
 
 type Order struct {
@@ -120,4 +121,29 @@ type OrderQueue struct {
 	RetryCount  int    `gorm:"default:0" json:"retry_count"`
 	ErrorMsg    string `gorm:"size:1000" json:"error_msg"`
 	Store       Store  `gorm:"foreignKey:StoreID" json:"store,omitempty"`
+}
+
+type FacePaymentRecord struct {
+	ID            uint            `gorm:"primarykey" json:"id"`
+	FacePaymentID string          `gorm:"size:64;unique;not null" json:"face_payment_id"`
+	OrderID       uint            `gorm:"not null;index" json:"order_id"`
+	OrderNo       string          `gorm:"size:32;not null" json:"order_no"`
+	StoreID       uint            `gorm:"not null;index" json:"store_id"`
+	DeviceID      string          `gorm:"size:64" json:"device_id"`
+	Provider      string          `gorm:"size:20;not null" json:"provider"`
+	Amount        decimal.Decimal `gorm:"type:decimal(10,2);not null" json:"amount"`
+	AuthCode      string          `gorm:"size:128" json:"auth_code"`
+	OpenID        string          `gorm:"size:128" json:"open_id"`
+	TransactionID string          `gorm:"size:100" json:"transaction_id"`
+	Status        int             `gorm:"default:0" json:"status"`
+	AuthInfo      string          `gorm:"type:text" json:"auth_info"`
+	ErrMsg        string          `gorm:"size:500" json:"err_msg"`
+	PayTime       *time.Time      `json:"pay_time"`
+	CreatedAt     time.Time       `json:"created_at"`
+	UpdatedAt     time.Time       `json:"updated_at"`
+	DeletedAt     gorm.DeletedAt  `gorm:"index" json:"-"`
+}
+
+func (FacePaymentRecord) TableName() string {
+	return "face_payment_records"
 }
