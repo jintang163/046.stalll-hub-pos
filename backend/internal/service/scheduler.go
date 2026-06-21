@@ -15,6 +15,7 @@ type SchedulerService struct {
 	forecastService  *ForecastService
 	purchaseService  *PurchaseService
 	timeSlotService  *TimeSlotPricingService
+	reviewService    *ReviewService
 }
 
 func NewSchedulerService() *SchedulerService {
@@ -26,6 +27,7 @@ func NewSchedulerService() *SchedulerService {
 		forecastService:  NewForecastService(),
 		purchaseService:  NewPurchaseService(),
 		timeSlotService:  NewTimeSlotPricingService(),
+		reviewService:    NewReviewService(),
 	}
 }
 
@@ -39,6 +41,9 @@ func (s *SchedulerService) StartAllSchedulers() {
 	go s.runStockWarningScheduler()
 	go s.runStockReservationCleaner()
 	go s.runReservationReminder()
+	go s.runReviewSyncScheduler()
+	go s.runReviewWorkOrderScheduler()
+	go s.runRatingAlertScheduler()
 	log.Println("[Scheduler] All schedulers started")
 }
 
@@ -414,5 +419,65 @@ func (s *SchedulerService) checkReservationReminders() {
 		log.Printf("[Scheduler] Failed to process reservation reminders: %v", err)
 	} else if sentCount > 0 {
 		log.Printf("[Scheduler] Sent %d reservation reminders", sentCount)
+	}
+}
+
+func (s *SchedulerService) runReviewSyncScheduler() {
+	ticker := time.NewTicker(2 * time.Hour)
+	defer ticker.Stop()
+
+	s.checkReviewSync()
+
+	for range ticker.C {
+		s.checkReviewSync()
+	}
+}
+
+func (s *SchedulerService) runReviewWorkOrderScheduler() {
+	ticker := time.NewTicker(30 * time.Minute)
+	defer ticker.Stop()
+
+	s.checkReviewWorkOrders()
+
+	for range ticker.C {
+		s.checkReviewWorkOrders()
+	}
+}
+
+func (s *SchedulerService) runRatingAlertScheduler() {
+	ticker := time.NewTicker(1 * time.Hour)
+	defer ticker.Stop()
+
+	s.checkRatingAlerts()
+
+	for range ticker.C {
+		s.checkRatingAlerts()
+	}
+}
+
+func (s *SchedulerService) checkReviewSync() {
+	count, err := s.reviewService.SyncAllStores()
+	if err != nil {
+		log.Printf("[Scheduler] Failed to sync reviews: %v", err)
+	} else if count > 0 {
+		log.Printf("[Scheduler] Synced reviews for %d stores", count)
+	}
+}
+
+func (s *SchedulerService) checkReviewWorkOrders() {
+	count, err := s.reviewService.AutoCreateWorkOrders()
+	if err != nil {
+		log.Printf("[Scheduler] Failed to create review work orders: %v", err)
+	} else if count > 0 {
+		log.Printf("[Scheduler] Created %d review work orders", count)
+	}
+}
+
+func (s *SchedulerService) checkRatingAlerts() {
+	count, err := s.reviewService.CheckRatingAlerts()
+	if err != nil {
+		log.Printf("[Scheduler] Failed to check rating alerts: %v", err)
+	} else if count > 0 {
+		log.Printf("[Scheduler] Triggered %d rating alerts", count)
 	}
 }

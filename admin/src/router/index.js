@@ -93,6 +93,24 @@ const routes = [
         meta: { title: '利润分析', icon: 'Coin' }
       },
       {
+        path: 'review/trend',
+        name: 'ReviewTrend',
+        component: () => import('@/views/review/index.vue'),
+        meta: { title: '点评趋势', icon: 'TrendCharts' }
+      },
+      {
+        path: 'review/reviews',
+        name: 'ReviewManage',
+        component: () => import('@/views/review/reviews.vue'),
+        meta: { title: '评价管理', icon: 'ChatDotRound' }
+      },
+      {
+        path: 'review/workorders',
+        name: 'ReviewWorkOrders',
+        component: () => import('@/views/review/workorders.vue'),
+        meta: { title: '工单告警', icon: 'Warning' }
+      },
+      {
         path: 'ingredients',
         name: 'Ingredients',
         component: () => import('@/views/ingredients/index.vue'),

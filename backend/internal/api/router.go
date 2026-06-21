@@ -43,6 +43,7 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 	waiterHandler := handler.NewWaiterHandler()
 	facePaymentHandler := handler.NewFacePaymentHandler()
 	timeSlotPricingHandler := handler.NewTimeSlotPricingHandler()
+	reviewHandler := handler.NewReviewHandler()
 
 	orderHandler := handler.NewOrderHandler(nil)
 
@@ -571,6 +572,33 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 		{
 			miniTimeSlotPricing.GET("/active", timeSlotPricingHandler.GetActiveTimeSlots)
 			miniTimeSlotPricing.POST("/calculate", timeSlotPricingHandler.CalculatePrice)
+		}
+
+		review := api.Group("/review")
+		review.Use(middleware.JWTAuth())
+		{
+			review.POST("/auth", reviewHandler.SaveAuth)
+			review.GET("/auth", reviewHandler.GetAuth)
+			review.GET("/auths", reviewHandler.ListAuths)
+
+			review.POST("/sync", reviewHandler.SyncReviews)
+			review.POST("/sync-all", reviewHandler.SyncAll)
+
+			review.GET("/ratings", reviewHandler.ListRatings)
+			review.GET("/ratings/trend", reviewHandler.GetRatingTrend)
+
+			review.GET("/reviews", reviewHandler.ListReviews)
+			review.GET("/reviews/:id", reviewHandler.GetReview)
+			review.POST("/reviews/:id/reply", reviewHandler.ReplyReview)
+
+			review.POST("/work-orders", reviewHandler.CreateWorkOrder)
+			review.GET("/work-orders", reviewHandler.ListWorkOrders)
+			review.GET("/work-orders/:id", reviewHandler.GetWorkOrder)
+			review.POST("/work-orders/:id/handle", reviewHandler.HandleWorkOrder)
+
+			review.GET("/alerts", reviewHandler.ListAlerts)
+			review.POST("/alerts/:id/handle", reviewHandler.HandleAlert)
+			review.POST("/alerts/check", reviewHandler.CheckAlerts)
 		}
 	}
 
