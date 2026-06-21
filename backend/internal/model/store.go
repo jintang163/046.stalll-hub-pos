@@ -47,3 +47,16 @@ type StoreUser struct {
 	Status   int    `gorm:"default:1" json:"status"`
 	Store    Store  `gorm:"foreignKey:StoreID" json:"store,omitempty"`
 }
+
+type WaiterCall struct {
+	BaseModel
+	StoreID   uint   `gorm:"not null;index" json:"store_id"`
+	TableID   uint   `gorm:"not null;index" json:"table_id"`
+	TableNo   string `gorm:"size:20;not null" json:"table_no"`
+	Content   string `gorm:"size:500" json:"content"`
+	CallType  string `gorm:"size:20;default:service" json:"call_type"`
+	Status    int    `gorm:"default:1" json:"status"`
+	HandlerID uint   `gorm:"index" json:"handler_id"`
+	HandleTime *time.Time `json:"handle_time"`
+	Table     Table  `gorm:"foreignKey:TableID" json:"table,omitempty"`
+}

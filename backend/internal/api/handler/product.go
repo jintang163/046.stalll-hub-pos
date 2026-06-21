@@ -3,8 +3,10 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"stalll-hub-pos/backend/internal/database"
 	"stalll-hub-pos/backend/internal/dto"
 	"stalll-hub-pos/backend/internal/middleware"
+	"stalll-hub-pos/backend/internal/model"
 	"stalll-hub-pos/backend/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -221,4 +223,23 @@ func (h *ProductHandler) GetStockWarnings(c *gin.Context) {
 		"page":  page,
 		"size":  pageSize,
 	})
+}
+
+func (h *ProductHandler) ListCategories(c *gin.Context) {
+	storeIDStr := c.Query("store_id")
+	storeID, _ := strconv.ParseUint(storeIDStr, 10, 32)
+	if storeID == 0 {
+		storeID = uint64(middleware.GetStoreID(c))
+	}
+
+	var categories []model.Category
+	err := database.DB.Where("store_id = ? AND status = ?", storeID, 1).
+		Order("sort_order ASC, id ASC").
+		Find(&categories).Error
+	if err != nil {
+		middleware.Error(c, "获取分类列表失败: "+err.Error())
+		return
+	}
+
+	middleware.Success(c, categories)
 }

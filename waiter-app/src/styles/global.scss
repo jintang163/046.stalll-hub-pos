@@ -1,0 +1,221 @@
+page {
+  background-color: #f5f5f5;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 28rpx;
+  color: #333;
+}
+
+.container {
+  padding: 24rpx;
+}
+
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.flex-row {
+  flex-direction: row;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.justify-center {
+  justify-content: center;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.flex-1 {
+  flex: 1;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.font-bold {
+  font-weight: bold;
+}
+
+.mt-8 {
+  margin-top: 16rpx;
+}
+
+.mt-16 {
+  margin-top: 32rpx;
+}
+
+.mb-8 {
+  margin-bottom: 16rpx;
+}
+
+.mb-16 {
+  margin-bottom: 32rpx;
+}
+
+.p-8 {
+  padding: 16rpx;
+}
+
+.p-16 {
+  padding: 32rpx;
+}
+
+.rounded {
+  border-radius: 16rpx;
+}
+
+.shadow {
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.08);
+}
+
+.bg-white {
+  background-color: #fff;
+}
+
+.text-primary {
+  color: #1989fa;
+}
+
+.text-success {
+  color: #07c160;
+}
+
+.text-warning {
+  color: #ff976a;
+}
+
+.text-danger {
+  color: #ee0a24;
+}
+
+.text-gray {
+  color: #969799;
+}
+
+.text-sm {
+  font-size: 24rpx;
+}
+
+.text-lg {
+  font-size: 32rpx;
+}
+
+.text-xl {
+  font-size: 36rpx;
+}
+
+.card {
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 24rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.08);
+}
+
+.btn-primary {
+  background-color: #1989fa;
+  color: #fff;
+  border-radius: 48rpx;
+  padding: 20rpx 48rpx;
+  text-align: center;
+  font-size: 30rpx;
+}
+
+.btn-success {
+  background-color: #07c160;
+  color: #fff;
+  border-radius: 48rpx;
+  padding: 20rpx 48rpx;
+  text-align: center;
+  font-size: 30rpx;
+}
+
+.btn-warning {
+  background-color: #ff976a;
+  color: #fff;
+  border-radius: 48rpx;
+  padding: 20rpx 48rpx;
+  text-align: center;
+  font-size: 30rpx;
+}
+
+.btn-danger {
+  background-color: #ee0a24;
+  color: #fff;
+  border-radius: 48rpx;
+  padding: 20rpx 48rpx;
+  text-align: center;
+  font-size: 30rpx;
+}
+
+.tag {
+  display: inline-block;
+  padding: 6rpx 16rpx;
+  border-radius: 8rpx;
+  font-size: 22rpx;
+}
+
+.tag-idle {
+  background: #e8f5e9;
+  color: #07c160;
+}
+
+.tag-occupied {
+  background: #fff7e6;
+  color: #ff976a;
+}
+
+.tag-ordered {
+  background: #e6f7ff;
+  color: #1989fa;
+}
+
+.tag-served {
+  background: #f0f0f0;
+  color: #969799;
+}
+
+.tag-paid {
+  background: #f6ffed;
+  color: #52c41a;
+}
+
+.badge {
+  position: absolute;
+  top: -8rpx;
+  right: -8rpx;
+  min-width: 36rpx;
+  height: 36rpx;
+  line-height: 36rpx;
+  padding: 0 10rpx;
+  border-radius: 18rpx;
+  background: #ee0a24;
+  color: #fff;
+  font-size: 20rpx;
+  text-align: center;
+}
+
+.divider {
+  height: 1rpx;
+  background: #ebedf0;
+  margin: 24rpx 0;
+}
+
+.empty {
+  padding: 120rpx 0;
+  text-align: center;
+  color: #969799;
+}

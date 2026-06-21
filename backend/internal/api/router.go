@@ -40,6 +40,7 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 	ingredientHandler := handler.NewIngredientHandler()
 	deliveryHandler := handler.NewDeliveryHandler()
 	forecastHandler := handler.NewForecastHandler()
+	waiterHandler := handler.NewWaiterHandler()
 
 	orderHandler := handler.NewOrderHandler(nil)
 
@@ -66,6 +67,7 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 			products.GET("/sync", productHandler.Sync)
 			products.GET("/stock-warnings", productHandler.GetStockWarnings)
 		}
+		api.GET("/products/categories", productHandler.ListCategories)
 
 		orders := api.Group("/orders")
 		{
@@ -517,6 +519,21 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 			purchases.POST("/:id/send", forecastHandler.SendPurchaseToSupplier)
 			purchases.GET("/:id/export", forecastHandler.ExportPurchaseExcel)
 		}
+
+		waiter := api.Group("/waiter")
+		waiter.Use(middleware.JWTAuth())
+		{
+			waiter.GET("/stats", waiterHandler.GetWaiterStats)
+			waiter.GET("/tables", waiterHandler.GetTablesWithStatus)
+			waiter.PUT("/order-items/cook-status", waiterHandler.UpdateItemCookStatus)
+			waiter.POST("/order-items/serve", waiterHandler.MarkItemsServed)
+			waiter.POST("/orders/:id/items", waiterHandler.AddOrderItems)
+			waiter.GET("/calls", waiterHandler.ListCalls)
+			waiter.POST("/calls/:id/handle", waiterHandler.HandleCall)
+		}
+
+		api.POST("/waiter/call", waiterHandler.CallWaiter)
+		api.GET("/waiter/ws", waiterHandler.WebSocket)
 	}
 
 	return r
