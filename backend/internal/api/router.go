@@ -38,6 +38,7 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 	stockWarningHandler := handler.NewStockWarningHandler()
 	analyticsHandler := handler.NewAnalyticsHandler()
 	ingredientHandler := handler.NewIngredientHandler()
+	deliveryHandler := handler.NewDeliveryHandler()
 
 	orderHandler := handler.NewOrderHandler(nil)
 
@@ -458,6 +459,41 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 		inventory.Use(middleware.JWTAuth())
 		{
 			inventory.POST("/sync", ingredientHandler.TriggerInventorySync)
+		}
+
+		delivery := api.Group("/delivery")
+		{
+			delivery.POST("", middleware.JWTAuth(), deliveryHandler.CreateDeliveryOrder)
+			delivery.GET("", middleware.JWTAuth(), deliveryHandler.ListDeliveryOrders)
+			delivery.GET("/:id", middleware.JWTAuth(), deliveryHandler.GetDeliveryOrder)
+			delivery.PUT("/:id/status", middleware.JWTAuth(), deliveryHandler.UpdateDeliveryStatus)
+			delivery.POST("/:id/assign-rider", middleware.JWTAuth(), deliveryHandler.AssignRider)
+			delivery.GET("/order/:orderId", deliveryHandler.GetDeliveryOrderByOrderID)
+			delivery.GET("/tracking/:orderId", deliveryHandler.GetDeliveryTracking)
+		}
+
+		riders := api.Group("/riders")
+		riders.Use(middleware.JWTAuth())
+		{
+			riders.POST("/store/:storeId", deliveryHandler.CreateRider)
+			riders.GET("/store/:storeId", deliveryHandler.ListRiders)
+			riders.DELETE("/:id", deliveryHandler.DeleteRider)
+			riders.POST("/location", deliveryHandler.UpdateRiderLocation)
+			riders.GET("/:riderId/location", deliveryHandler.GetRiderLocation)
+		}
+
+		pickup := api.Group("/pickup")
+		{
+			pickup.POST("/code", deliveryHandler.GeneratePickupCode)
+			pickup.POST("/verify", deliveryHandler.VerifyPickupCode)
+			pickup.GET("/order/:orderId", deliveryHandler.GetPickupCodeByOrder)
+		}
+
+		amap := api.Group("/amap")
+		amap.Use(middleware.JWTAuth())
+		{
+			amap.POST("/route", deliveryHandler.PlanRoute)
+			amap.POST("/geocode", deliveryHandler.Geocode)
 		}
 	}
 

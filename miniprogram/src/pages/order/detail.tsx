@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react'
-import { View, Text, Image, ScrollView, Steps, Step } from '@tarojs/components'
+import { View, Text, Image, ScrollView } from '@tarojs/components'
 import Taro, { useRouter } from '@tarojs/taro'
-import { Loading, Dialog, Button, Cell, Timeline, TimelineItem } from '@nutui/nutui-react-taro'
+import { Loading, Dialog, Button, Cell } from '@nutui/nutui-react-taro'
 import { getOrderDetail, cancelOrder, refundOrder, getPaymentParams } from '../../services/order'
 import type { Order } from '../../services/order'
+import { orderTypeMap } from '../../services/delivery'
+import DeliveryProgress from '../../components/DeliveryProgress'
 import styles from './detail.module.scss'
 
 const statusMap: Record<number, { text: string; color: string }> = {
@@ -125,6 +127,7 @@ const OrderDetail: React.FC = () => {
   }
 
   const statusInfo = statusMap[order.status] || { text: '未知状态', color: '#999' }
+  const orderTypeLabel = (orderTypeMap as any)[order.order_type || 'dine_in']?.label || '堂食'
 
   return (
     <View className={styles.container}>
@@ -139,6 +142,9 @@ const OrderDetail: React.FC = () => {
             <Text className={styles.statusText} style={{ color: statusInfo.color }}>
               {statusInfo.text}
             </Text>
+            {order.order_type && (
+              <Text className={styles.orderTypeTag}>{orderTypeLabel}</Text>
+            )}
             {order.status === 2 && (
               <Text className={styles.statusDesc}>商家正在为您准备餐品，请稍候</Text>
             )}
@@ -148,7 +154,15 @@ const OrderDetail: React.FC = () => {
           </View>
         </View>
 
-        {order.status >= 1 && order.status <= 3 && (
+        {(order.order_type === 'delivery' || order.order_type === 'pickup' || order.order_type === 'takeout') && order.id && (
+          <DeliveryProgress
+            orderId={order.id}
+            orderType={order.order_type || 'dine_in'}
+            pickupCode={(order as any).pickup_code}
+          />
+        )}
+
+        {order.order_type === 'dine_in' && order.status >= 1 && order.status <= 3 && (
           <View className={styles.section}>
             <View className={styles.sectionHeader}>
               <Text className={styles.sectionTitle}>订单进度</Text>
@@ -173,6 +187,12 @@ const OrderDetail: React.FC = () => {
           <Cell title='门店' description={order.store_id?.toString() || '门店名称'} />
           {order.table_no && (
             <Cell title='桌号' description={order.table_no} />
+          )}
+          {(order as any).delivery_address && (
+            <Cell title='配送地址' description={(order as any).delivery_address} />
+          )}
+          {(order as any).delivery_contact && (
+            <Cell title='联系人' description={`${(order as any).delivery_contact} ${(order as any).delivery_phone || ''}`} />
           )}
         </View>
 
@@ -230,6 +250,9 @@ const OrderDetail: React.FC = () => {
           <Cell title='商品合计' extra={`¥${order.total_amount.toFixed(2)}`} />
           {order.discount_amount > 0 && (
             <Cell title='优惠折扣' extra={`-¥${order.discount_amount.toFixed(2)}`} />
+          )}
+          {(order as any).delivery_fee > 0 && (
+            <Cell title='配送费' extra={`¥${Number((order as any).delivery_fee).toFixed(2)}`} />
           )}
           <View className={styles.totalRow}>
             <Text className={styles.totalLabel}>实付金额</Text>

@@ -29,6 +29,13 @@ type Order struct {
 	MemberCouponID  uint            `json:"member_coupon_id"`
 	Remark          string          `gorm:"size:500" json:"remark"`
 	Source          string          `gorm:"size:20;default:cashier" json:"source"`
+	PickupCode      string          `gorm:"size:8" json:"pickup_code"`
+	DeliveryAddress string          `gorm:"size:255" json:"delivery_address"`
+	DeliveryContact string          `gorm:"size:50" json:"delivery_contact"`
+	DeliveryPhone   string          `gorm:"size:20" json:"delivery_phone"`
+	DeliveryLng     float64         `json:"delivery_lng"`
+	DeliveryLat     float64         `json:"delivery_lat"`
+	DeliveryFee     decimal.Decimal `gorm:"type:decimal(10,2);default:0" json:"delivery_fee"`
 	Store           Store           `gorm:"foreignKey:StoreID" json:"store,omitempty"`
 	Member          *Member         `gorm:"foreignKey:MemberID" json:"member,omitempty"`
 	Items           []OrderItem     `gorm:"foreignKey:OrderID" json:"items,omitempty"`

@@ -216,3 +216,85 @@
   font-size: 22rpx;
   color: #999;
 }
+
+.orderTypeRow {
+  display: flex;
+  padding: 20rpx 32rpx 28rpx;
+  gap: 16rpx;
+}
+
+.orderTypeItem {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+  padding: 20rpx 12rpx;
+  border-radius: 16rpx;
+  background: #f5f7fa;
+  border: 2rpx solid transparent;
+  transition: all 0.2s;
+}
+
+.orderTypeActive {
+  background: linear-gradient(135deg, #f0f4ff 0%, #e8eaff 100%);
+  border-color: #667eea;
+}
+
+.orderTypeIcon {
+  font-size: 40rpx;
+}
+
+.orderTypeLabel {
+  font-size: 22rpx;
+  color: #333;
+  font-weight: 500;
+}
+
+.pickupHint {
+  padding: 20rpx 32rpx;
+  background: #fffdf0;
+}
+
+.pickupHintText {
+  font-size: 24rpx;
+  color: #e6a23c;
+}
+
+.formField {
+  display: flex;
+  align-items: center;
+  padding: 20rpx 32rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.formLabel {
+  width: 140rpx;
+  font-size: 28rpx;
+  color: #333;
+  flex-shrink: 0;
+}
+
+.formInput {
+  flex: 1;
+  font-size: 28rpx;
+  color: #333;
+}
+
+.deliveryFeeRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20rpx 32rpx;
+}
+
+.deliveryFeeLabel {
+  font-size: 28rpx;
+  color: #666;
+}
+
+.deliveryFeeValue {
+  font-size: 28rpx;
+  color: #f56c6c;
+  font-weight: 600;
+}

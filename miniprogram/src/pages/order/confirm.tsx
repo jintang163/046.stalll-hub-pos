@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { View, Text, Image, ScrollView } from '@tarojs/components'
+import { View, Text, Image, ScrollView, Input } from '@tarojs/components'
 import Taro from '@tarojs/taro'
 import { Loading, Dialog, Cell, Button } from '@nutui/nutui-react-taro'
 import { useCartStore } from '../../store/cart'
@@ -7,6 +7,8 @@ import { useAppStore } from '../../store/app'
 import { getAvailableCoupons, MemberCoupon, calculateBestCombination, BestPromotionResponse } from '../../services/coupon'
 import { createOrder, getPaymentParams } from '../../services/order'
 import type { OrderCreateDTO, OrderItem } from '../../services/order'
+import { orderTypeMap, planRoute } from '../../services/delivery'
+import type { OrderType } from '../../services/delivery'
 import { isLogin, loginByCode } from '../../services/auth'
 import styles from './confirm.module.scss'
 
@@ -31,7 +33,15 @@ const OrderConfirm: React.FC = () => {
   const [createdOrder, setCreatedOrder] = useState<any>(null)
   const [bestPromo, setBestPromo] = useState<BestPromotionResponse | null>(null)
 
-  const actualTotal = bestPromo ? bestPromo.final_amount : Math.max(0, total - couponDiscount)
+  const [orderType, setOrderType] = useState<OrderType>('dine_in')
+  const [deliveryAddress, setDeliveryAddress] = useState('')
+  const [deliveryContact, setDeliveryContact] = useState('')
+  const [deliveryPhone, setDeliveryPhone] = useState('')
+  const [deliveryFee, setDeliveryFee] = useState(0)
+
+  const actualTotal = bestPromo
+    ? bestPromo.final_amount + deliveryFee
+    : Math.max(0, total - couponDiscount) + deliveryFee
 
   const productIds = Array.from(new Set(items.map(item => item.product_id)))
 
@@ -39,6 +49,25 @@ const OrderConfirm: React.FC = () => {
     loadPromotions()
     loadCoupons()
   }, [total, productIds.join(',')])
+
+  useEffect(() => {
+    if (orderType === 'delivery' && deliveryAddress && currentStore) {
+      estimateDeliveryFee()
+    }
+  }, [orderType, deliveryAddress])
+
+  const estimateDeliveryFee = async () => {
+    try {
+      if (!currentStore) return
+      const result = await planRoute(
+        116.397428, 39.90923,
+        116.407, 39.919
+      )
+      setDeliveryFee(result.fee)
+    } catch {
+      setDeliveryFee(5)
+    }
+  }
 
   const loadPromotions = async () => {
     if (!currentStore || productIds.length === 0) return
@@ -92,9 +121,20 @@ const OrderConfirm: React.FC = () => {
       return
     }
 
-    if (!tableNo) {
+    if (orderType === 'dine_in' && !tableNo) {
       Taro.showToast({ title: '请输入桌号', icon: 'none' })
       return
+    }
+
+    if (orderType === 'delivery') {
+      if (!deliveryAddress) {
+        Taro.showToast({ title: '请填写配送地址', icon: 'none' })
+        return
+      }
+      if (!deliveryContact || !deliveryPhone) {
+        Taro.showToast({ title: '请填写联系人信息', icon: 'none' })
+        return
+      }
     }
 
     if (!isLogin()) {
@@ -120,13 +160,17 @@ const OrderConfirm: React.FC = () => {
       const orderData: OrderCreateDTO = {
         store_id: currentStore.id,
         items: orderItems,
-        table_no: tableNo,
+        table_no: orderType === 'dine_in' ? tableNo : undefined,
         remark: remark,
         coupon_id: couponId || undefined,
         member_coupon_id: couponId || undefined,
         member_id: user?.id,
-        order_type: 'dine_in',
-        source: 'miniprogram'
+        order_type: orderType,
+        source: 'miniprogram',
+        delivery_address: orderType === 'delivery' ? deliveryAddress : undefined,
+        delivery_contact: orderType === 'delivery' ? deliveryContact : undefined,
+        delivery_phone: orderType === 'delivery' ? deliveryPhone : undefined,
+        delivery_fee: orderType === 'delivery' ? deliveryFee : undefined,
       }
 
       const order = await createOrder(orderData)
@@ -195,10 +239,31 @@ const OrderConfirm: React.FC = () => {
     return map[type] || type
   }
 
+  const orderTypes: OrderType[] = ['dine_in', 'pickup', 'delivery', 'takeout']
+
   return (
     <View className={styles.container}>
       <ScrollView scrollY className={styles.scrollContent}>
-        {currentStore && (
+        <View className={styles.section}>
+          <View className={styles.sectionHeader}>
+            <Text className={styles.sectionIcon}>🛎️</Text>
+            <Text className={styles.sectionTitle}>用餐方式</Text>
+          </View>
+          <View className={styles.orderTypeRow}>
+            {orderTypes.map(type => (
+              <View
+                key={type}
+                className={`${styles.orderTypeItem} ${orderType === type ? styles.orderTypeActive : ''}`}
+                onClick={() => setOrderType(type)}
+              >
+                <Text className={styles.orderTypeIcon}>{orderTypeMap[type].icon}</Text>
+                <Text className={styles.orderTypeLabel}>{orderTypeMap[type].label}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {orderType === 'dine_in' && currentStore && (
           <View className={styles.section}>
             <View className={styles.sectionHeader}>
               <Text className={styles.sectionIcon}>📍</Text>
@@ -213,6 +278,67 @@ const OrderConfirm: React.FC = () => {
               description={tableNo || '请选择桌号'}
               onClick={() => Taro.navigateTo({ url: '/pages/cart/index' })}
             />
+          </View>
+        )}
+
+        {(orderType === 'pickup' || orderType === 'takeout') && currentStore && (
+          <View className={styles.section}>
+            <View className={styles.sectionHeader}>
+              <Text className={styles.sectionIcon}>📍</Text>
+              <Text className={styles.sectionTitle}>取餐信息</Text>
+            </View>
+            <Cell
+              title={currentStore.name}
+              description={currentStore.address}
+            />
+            <View className={styles.pickupHint}>
+              <Text className={styles.pickupHintText}>
+                {orderType === 'pickup' ? '备餐完成后将推送取餐码，请凭码取餐' : '备餐完成后通知您，请到店取餐'}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {orderType === 'delivery' && (
+          <View className={styles.section}>
+            <View className={styles.sectionHeader}>
+              <Text className={styles.sectionIcon}>🛵</Text>
+              <Text className={styles.sectionTitle}>配送信息</Text>
+            </View>
+            <View className={styles.formField}>
+              <Text className={styles.formLabel}>联系人</Text>
+              <Input
+                className={styles.formInput}
+                placeholder='请输入联系人姓名'
+                value={deliveryContact}
+                onInput={(e) => setDeliveryContact(e.detail.value)}
+              />
+            </View>
+            <View className={styles.formField}>
+              <Text className={styles.formLabel}>手机号</Text>
+              <Input
+                className={styles.formInput}
+                placeholder='请输入联系电话'
+                type='number'
+                value={deliveryPhone}
+                onInput={(e) => setDeliveryPhone(e.detail.value)}
+              />
+            </View>
+            <View className={styles.formField}>
+              <Text className={styles.formLabel}>配送地址</Text>
+              <Input
+                className={styles.formInput}
+                placeholder='请输入详细配送地址'
+                value={deliveryAddress}
+                onInput={(e) => setDeliveryAddress(e.detail.value)}
+              />
+            </View>
+            {deliveryFee > 0 && (
+              <View className={styles.deliveryFeeRow}>
+                <Text className={styles.deliveryFeeLabel}>配送费</Text>
+                <Text className={styles.deliveryFeeValue}>¥{deliveryFee.toFixed(2)}</Text>
+              </View>
+            )}
           </View>
         )}
 
@@ -300,6 +426,9 @@ const OrderConfirm: React.FC = () => {
             <Text className={styles.sectionTitle}>费用明细</Text>
           </View>
           <Cell title='商品合计' extra={`¥${total.toFixed(2)}`} />
+          {deliveryFee > 0 && (
+            <Cell title='配送费' extra={`¥${deliveryFee.toFixed(2)}`} />
+          )}
           {bestPromo && bestPromo.total_discount > 0 && (
             <Cell title='活动优惠' extra={`-¥${Number(bestPromo.total_discount).toFixed(2)}`} />
           )}

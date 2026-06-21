@@ -65,4 +65,21 @@ cost_alert:
   cooldown_hours: 24
   operating_expense_rate: 15.0
 
+amap:
+  key: "your_amap_key"
+  web_key: "your_amap_web_key"
+  base_url: "https://restapi.amap.com/v3"
+
+meituan:
+  app_key: ""
+  app_secret: ""
+  base_url: "https://waimai.meituan.com/api/v1"
+  enabled: false
+
+eleme:
+  app_key: ""
+  app_secret: ""
+  base_url: "https://open.ele.me/api/v1"
+  enabled: false
+
 

@@ -78,6 +78,10 @@ func main() {
 		&model.ProductBOM{},
 		&model.IngredientPrice{},
 		&model.CostAlert{},
+		&model.DeliveryOrder{},
+		&model.PickupCode{},
+		&model.Rider{},
+		&model.DeliveryTracking{},
 	)
 
 	initDefaultData()

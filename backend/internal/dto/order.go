@@ -20,13 +20,19 @@ type CreateOrderRequest struct {
 	StoreID        uint            `json:"store_id" binding:"required"`
 	MemberID       uint            `json:"member_id"`
 	TableNo        string          `json:"table_no"`
-	OrderType      string          `json:"order_type" binding:"required,oneof=dine_in takeout delivery"`
+	OrderType      string          `json:"order_type" binding:"required,oneof=dine_in takeout delivery pickup"`
 	Items          []OrderItemDTO  `json:"items" binding:"required,min=1"`
 	CouponID       uint            `json:"coupon_id"`
 	MemberCouponID uint            `json:"member_coupon_id"`
 	PointsUsed     int             `json:"points_used"`
 	Remark         string          `json:"remark"`
 	Source         string          `json:"source"`
+	DeliveryAddress string         `json:"delivery_address"`
+	DeliveryContact string         `json:"delivery_contact"`
+	DeliveryPhone   string         `json:"delivery_phone"`
+	DeliveryLng     float64        `json:"delivery_lng"`
+	DeliveryLat     float64        `json:"delivery_lat"`
+	DeliveryFee     decimal.Decimal `json:"delivery_fee"`
 }
 
 type CreateOrderResponse struct {
@@ -92,6 +98,13 @@ type OrderDetailResponse struct {
 	MemberCouponID  uint                  `json:"member_coupon_id"`
 	Remark          string                `json:"remark"`
 	Source          string                `json:"source"`
+	PickupCode      string                `json:"pickup_code,omitempty"`
+	DeliveryAddress string                `json:"delivery_address,omitempty"`
+	DeliveryContact string                `json:"delivery_contact,omitempty"`
+	DeliveryPhone   string                `json:"delivery_phone,omitempty"`
+	DeliveryLng     float64               `json:"delivery_lng"`
+	DeliveryLat     float64               `json:"delivery_lat"`
+	DeliveryFee     decimal.Decimal       `json:"delivery_fee"`
 	Items           []OrderItemDetail     `json:"items"`
 	Refunds         []OrderRefundDetail   `json:"refunds,omitempty"`
 	CreatedAt       time.Time             `json:"created_at"`

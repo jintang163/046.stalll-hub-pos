@@ -73,6 +73,16 @@
   color: rgba(255, 255, 255, 0.85);
 }
 
+.orderTypeTag {
+  display: inline-block;
+  font-size: 22rpx;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.25);
+  padding: 4rpx 16rpx;
+  border-radius: 20rpx;
+  margin-top: 8rpx;
+}
+
 .section {
   background: #fff;
   margin-bottom: 20rpx;

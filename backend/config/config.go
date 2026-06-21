@@ -20,6 +20,29 @@ type Config struct {
 	DingTalk    DingTalkConfig    `mapstructure:"dingtalk"`
 	Inventory   InventoryConfig   `mapstructure:"inventory"`
 	CostAlert   CostAlertConfig   `mapstructure:"cost_alert"`
+	Amap        AmapConfig        `mapstructure:"amap"`
+	Meituan     MeituanConfig     `mapstructure:"meituan"`
+	Eleme       ElemeConfig       `mapstructure:"eleme"`
+}
+
+type AmapConfig struct {
+	Key      string `mapstructure:"key"`
+	WebKey   string `mapstructure:"web_key"`
+	BaseURL  string `mapstructure:"base_url"`
+}
+
+type MeituanConfig struct {
+	AppKey    string `mapstructure:"app_key"`
+	AppSecret string `mapstructure:"app_secret"`
+	BaseURL   string `mapstructure:"base_url"`
+	Enabled   bool   `mapstructure:"enabled"`
+}
+
+type ElemeConfig struct {
+	AppKey    string `mapstructure:"app_key"`
+	AppSecret string `mapstructure:"app_secret"`
+	BaseURL   string `mapstructure:"base_url"`
+	Enabled   bool   `mapstructure:"enabled"`
 }
 
 type ClickHouseConfig struct {
