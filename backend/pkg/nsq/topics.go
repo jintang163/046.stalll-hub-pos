@@ -17,6 +17,7 @@ const (
 	TopicStallChanged    = "stall_change"
 	TopicStallOrder      = "stall_order"
 	TopicStallDeviceAlert = "stall_device_alert"
+	TopicPickupCodeReady  = "pickup_code_ready"
 )
 
 type ProductChangeMessage struct {
@@ -190,6 +191,18 @@ func PublishStallDeviceAlert(deviceID uint, deviceName, deviceNo, stallName stri
 		Timestamp:      GetCurrentTimestamp(),
 	}
 	return Publish(TopicStallDeviceAlert, msg)
+}
+
+func PublishPickupCodeReady(orderID uint, orderNo string, storeID uint, code string, orderType string) error {
+	msg := map[string]interface{}{
+		"order_id":   orderID,
+		"order_no":   orderNo,
+		"store_id":   storeID,
+		"code":       code,
+		"order_type": orderType,
+		"timestamp":  GetCurrentTimestamp(),
+	}
+	return Publish(TopicPickupCodeReady, msg)
 }
 
 func GetCurrentTimestamp() int64 {

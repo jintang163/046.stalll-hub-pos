@@ -1,18 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { View, Text } from '@tarojs/components'
 import Taro from '@tarojs/taro'
-import { getDeliveryTracking, getRiderLocation, deliveryStatusMap } from '../../services/delivery'
-import type { DeliveryTracking } from '../../services/delivery'
+import { getDeliveryTracking, getRiderLocation, getPickupCodeByOrder, deliveryStatusMap } from '../../services/delivery'
+import type { DeliveryTracking, PickupCodeInfo } from '../../services/delivery'
 import styles from './DeliveryProgress.module.scss'
 
 interface DeliveryProgressProps {
   orderId: number
   orderType: string
   pickupCode?: string
+  orderStatus?: number
 }
 
-const DeliveryProgress: React.FC<DeliveryProgressProps> = ({ orderId, orderType, pickupCode }) => {
+const DeliveryProgress: React.FC<DeliveryProgressProps> = ({ orderId, orderType, pickupCode: initialPickupCode, orderStatus }) => {
   const [tracking, setTracking] = useState<DeliveryTracking | null>(null)
+  const [pickupCode, setPickupCode] = useState<string | undefined>(initialPickupCode)
+  const [pickupExpiredAt, setPickupExpiredAt] = useState<string | undefined>()
   const [refreshing, setRefreshing] = useState(false)
   const timerRef = useRef<any>(null)
 
@@ -20,13 +23,16 @@ const DeliveryProgress: React.FC<DeliveryProgressProps> = ({ orderId, orderType,
     if (orderType === 'delivery') {
       loadTracking()
       timerRef.current = setInterval(loadTracking, 15000)
+    } else if ((orderType === 'pickup' || orderType === 'takeout') && !pickupCode && orderStatus && orderStatus >= 2) {
+      loadPickupCode()
+      timerRef.current = setInterval(loadPickupCode, 10000)
     }
     return () => {
       if (timerRef.current) {
         clearInterval(timerRef.current)
       }
     }
-  }, [orderId, orderType])
+  }, [orderId, orderType, pickupCode, orderStatus])
 
   const loadTracking = async () => {
     setRefreshing(true)
@@ -35,6 +41,21 @@ const DeliveryProgress: React.FC<DeliveryProgressProps> = ({ orderId, orderType,
       setTracking(data)
     } catch {}
     setRefreshing(false)
+  }
+
+  const loadPickupCode = async () => {
+    try {
+      const data: PickupCodeInfo = await getPickupCodeByOrder(orderId)
+      if (data && data.code) {
+        setPickupCode(data.code)
+        if (data.expired_at) {
+          setPickupExpiredAt(data.expired_at)
+        }
+        if (timerRef.current) {
+          clearInterval(timerRef.current)
+        }
+      }
+    } catch {}
   }
 
   if (orderType === 'pickup') {
@@ -52,6 +73,9 @@ const DeliveryProgress: React.FC<DeliveryProgressProps> = ({ orderId, orderType,
                 <Text className={styles.pickupCodeValue}>{pickupCode}</Text>
               </View>
               <Text className={styles.pickupCodeHint}>备餐完成后凭此码取餐</Text>
+              {pickupExpiredAt && (
+                <Text className={styles.pickupCodeExpiry}>有效期至 {pickupExpiredAt}</Text>
+              )}
             </View>
           ) : (
             <View className={styles.pickupWaiting}>
@@ -71,19 +95,52 @@ const DeliveryProgress: React.FC<DeliveryProgressProps> = ({ orderId, orderType,
             <Text className={styles.pickupEmoji}>🥡</Text>
             <Text className={styles.pickupTitle}>到店自取</Text>
           </View>
-          <View className={styles.pickupWaiting}>
-            <Text className={styles.waitingText}>备餐完成后通知您到店取餐</Text>
+          {pickupCode ? (
+            <View className={styles.pickupCodeSection}>
+              <Text className={styles.pickupCodeLabel}>取餐码</Text>
+              <View className={styles.pickupCodeBox}>
+                <Text className={styles.pickupCodeValue}>{pickupCode}</Text>
+              </View>
+              <Text className={styles.pickupCodeHint}>凭此码到店取餐</Text>
+            </View>
+          ) : (
+            <View className={styles.pickupWaiting}>
+              <Text className={styles.waitingText}>备餐完成后将生成取餐码...</Text>
+            </View>
+          )}
+        </View>
+      </View>
+    )
+  }
+
+  if (orderType !== 'delivery') {
+    return null
+  }
+
+  if (!tracking) {
+    return (
+      <View className={styles.container}>
+        <View className={styles.statusCard}>
+          <View className={styles.statusHeader}>
+            <Text className={styles.statusEmoji}>📦</Text>
+            <View className={styles.statusInfo}>
+              <Text className={styles.statusText} style={{ color: '#e6a23c' }}>配送单创建中</Text>
+              <Text className={styles.estimatedTime}>支付成功后自动创建配送单</Text>
+            </View>
           </View>
         </View>
       </View>
     )
   }
 
-  if (orderType !== 'delivery' || !tracking) {
-    return null
-  }
-
   const statusInfo = deliveryStatusMap[tracking.delivery_status] || { text: '未知', color: '#999' }
+
+  const deliveryTypeLabels: Record<string, string> = {
+    self: '商家自配送',
+    meituan: '美团配送',
+    eleme: '饿了么配送',
+  }
+  const deliveryTypeLabel = deliveryTypeLabels[tracking.delivery_type] || '配送'
 
   const getStepStatus = (step: number) => {
     if (tracking.delivery_status >= step) return 'done'
@@ -109,6 +166,7 @@ const DeliveryProgress: React.FC<DeliveryProgressProps> = ({ orderId, orderType,
             <Text className={styles.statusText} style={{ color: statusInfo.color }}>
               {statusInfo.text}
             </Text>
+            <Text className={styles.estimatedTime}>{deliveryTypeLabel}</Text>
             {tracking.estimated_time && tracking.delivery_status < 3 && (
               <Text className={styles.estimatedTime}>
                 预计 {new Date(tracking.estimated_time).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })} 送达

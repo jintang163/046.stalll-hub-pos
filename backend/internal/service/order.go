@@ -312,7 +312,18 @@ func (s *OrderService) UpdateStatus(id uint, status int) error {
 		return fmt.Errorf("invalid status transition from %d to %d", order.OrderStatus, status)
 	}
 
-	return s.orderRepo.UpdateStatus(id, status)
+	if err := s.orderRepo.UpdateStatus(id, status); err != nil {
+		return err
+	}
+
+	if status == 3 && (order.OrderType == "pickup" || order.OrderType == "takeout") {
+		deliveryService := NewDeliveryService()
+		if err := deliveryService.AutoGeneratePickupCode(order); err != nil {
+			log.Printf("auto generate pickup code failed for order %d: %v", order.ID, err)
+		}
+	}
+
+	return nil
 }
 
 func (s *OrderService) Cancel(id uint, reason string) error {
@@ -512,6 +523,13 @@ func (s *OrderService) NotifyPayment(orderNo string, payMethod string, transacti
 			"pay_time":       payTime,
 		})
 		_ = s.nsqProducer.Publish(nsq.TopicOrderPaid, payData)
+	}
+
+	if order.OrderType == "delivery" {
+		deliveryService := NewDeliveryService()
+		if err := deliveryService.AutoCreateDeliveryOrder(&order); err != nil {
+			log.Printf("auto create delivery order failed for order %d: %v", order.ID, err)
+		}
 	}
 
 	return nil

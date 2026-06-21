@@ -159,6 +159,7 @@ const OrderDetail: React.FC = () => {
             orderId={order.id}
             orderType={order.order_type || 'dine_in'}
             pickupCode={(order as any).pickup_code}
+            orderStatus={order.status}
           />
         )}
 

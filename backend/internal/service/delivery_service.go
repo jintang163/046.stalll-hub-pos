@@ -5,13 +5,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math/big"
+	"strconv"
 	"time"
 
 	"gorm.io/gorm"
+	"stalll-hub-pos/backend/config"
 	"stalll-hub-pos/backend/internal/dto"
 	"stalll-hub-pos/backend/internal/model"
 	"stalll-hub-pos/backend/pkg/database"
+	"stalll-hub-pos/backend/pkg/nsq"
 	"stalll-hub-pos/backend/pkg/redis"
 )
 
@@ -283,6 +287,26 @@ func (s *DeliveryService) GetDeliveryTracking(orderID uint) (*dto.DeliveryTracki
 		return nil, fmt.Errorf("delivery order not found: %w", err)
 	}
 
+	riderLng := deliveryOrder.RiderLng
+	riderLat := deliveryOrder.RiderLat
+
+	if deliveryOrder.RiderID > 0 {
+		cacheKey := fmt.Sprintf("rider:location:%d", deliveryOrder.RiderID)
+		if data, err := redis.Get(cacheKey); err == nil && data != "" {
+			var loc struct {
+				Lng     float64 `json:"lng"`
+				Lat     float64 `json:"lat"`
+				Speed   float64 `json:"speed"`
+				Heading float64 `json:"heading"`
+				Ts      int64   `json:"ts"`
+			}
+			if parseJSON(data, &loc) == nil {
+				riderLng = loc.Lng
+				riderLat = loc.Lat
+			}
+		}
+	}
+
 	var trackings []model.DeliveryTracking
 	database.DB.Where("delivery_order_id = ?", deliveryOrder.ID).
 		Order("timestamp DESC").Limit(50).Find(&trackings)
@@ -299,12 +323,13 @@ func (s *DeliveryService) GetDeliveryTracking(orderID uint) (*dto.DeliveryTracki
 
 	return &dto.DeliveryTrackingResponse{
 		OrderNo:         deliveryOrder.Order.OrderNo,
+		DeliveryType:    deliveryOrder.DeliveryType,
 		DeliveryStatus:  deliveryOrder.DeliveryStatus,
 		RiderID:         deliveryOrder.RiderID,
 		RiderName:       deliveryOrder.RiderName,
 		RiderPhone:      deliveryOrder.RiderPhone,
-		RiderLng:        deliveryOrder.RiderLng,
-		RiderLat:        deliveryOrder.RiderLat,
+		RiderLng:        riderLng,
+		RiderLat:        riderLat,
 		Distance:        deliveryOrder.Distance,
 		Duration:        deliveryOrder.Duration,
 		ReceiverAddress: deliveryOrder.ReceiverAddress,
@@ -350,9 +375,10 @@ func (s *DeliveryService) GeneratePickupCode(orderID uint, storeID uint) (*dto.P
 	database.DB.Model(&order).Update("pickup_code", code)
 
 	return &dto.PickupCodeResponse{
-		OrderID: orderID,
-		Code:    code,
-		Status:  0,
+		OrderID:   orderID,
+		Code:      code,
+		Status:    0,
+		ExpiredAt: expiredAt.Format("2006-01-02 15:04:05"),
 	}, nil
 }
 
@@ -423,9 +449,10 @@ func (s *DeliveryService) GetPickupCodeByOrderID(orderID uint) (*dto.PickupCodeR
 		return nil, fmt.Errorf("pickup code not found: %w", err)
 	}
 	return &dto.PickupCodeResponse{
-		OrderID: pickupCode.OrderID,
-		Code:    pickupCode.Code,
-		Status:  pickupCode.Status,
+		OrderID:   pickupCode.OrderID,
+		Code:      pickupCode.Code,
+		Status:    pickupCode.Status,
+		ExpiredAt: pickupCode.ExpiredAt.Format("2006-01-02 15:04:05"),
 	}, nil
 }
 
@@ -502,6 +529,220 @@ func generatePickupCode() string {
 
 func parseJSON(data string, v interface{}) error {
 	return json.Unmarshal([]byte(data), v)
+}
+
+func (s *DeliveryService) SimulateRiderLocation(deliveryID uint) error {
+	var deliveryOrder model.DeliveryOrder
+	if err := database.DB.Preload("Order").First(&deliveryOrder, deliveryID).Error; err != nil {
+		return fmt.Errorf("delivery order not found: %w", err)
+	}
+
+	if deliveryOrder.RiderID == 0 {
+		return fmt.Errorf("no rider assigned to delivery order %d", deliveryID)
+	}
+
+	senderLng := deliveryOrder.SenderLng
+	senderLat := deliveryOrder.SenderLat
+	destLng := deliveryOrder.ReceiverLng
+	destLat := deliveryOrder.ReceiverLat
+
+	if destLng == 0 || destLat == 0 {
+		destLng = senderLng + 0.01
+		destLat = senderLat + 0.01
+	}
+
+	var trackings []model.DeliveryTracking
+	database.DB.Where("delivery_order_id = ?", deliveryOrder.ID).
+		Order("timestamp DESC").Find(&trackings)
+
+	currentLng := senderLng
+	currentLat := senderLat
+	if len(trackings) > 0 {
+		currentLng = trackings[0].Lng
+		currentLat = trackings[0].Lat
+	}
+
+	progress := 0.15
+	if len(trackings) > 0 {
+		progress = 0.05
+	}
+
+	newLng := currentLng + (destLng-currentLng)*progress
+	newLat := currentLat + (destLat-currentLat)*progress
+
+	distanceToDest := func(lng, lat float64) float64 {
+		dlng := (destLng - lng) * 111000 * 0.866
+		dlat := (destLat - lat) * 111000
+		return dlng*dlng + dlat*dlat
+	}
+
+	if distanceToDest(newLng, newLat) < 100 {
+		newLng = destLng
+		newLat = destLat
+		now := time.Now()
+		database.DB.Model(&deliveryOrder).Updates(map[string]interface{}{
+			"delivery_status": 3,
+			"delivered_at":    &now,
+		})
+		log.Printf("[DeliveryService] simulated delivery completed for order %d", deliveryOrder.OrderID)
+	} else if deliveryOrder.DeliveryStatus == 1 {
+		database.DB.Model(&deliveryOrder).Update("delivery_status", 2)
+	}
+
+	randSpeed, _ := rand.Int(rand.Reader, big.NewInt(12))
+	speed := 8.0 + float64(randSpeed.Int64())
+	heading := 0.0
+
+	req := &dto.RiderLocationUpdate{
+		RiderID: deliveryOrder.RiderID,
+		Lng:     newLng,
+		Lat:     newLat,
+		Speed:   speed,
+		Heading: heading,
+	}
+
+	return s.UpdateRiderLocation(req)
+}
+
+func (s *DeliveryService) AutoCreateDeliveryOrder(order *model.Order) error {
+	var existing model.DeliveryOrder
+	if err := database.DB.Where("order_id = ?", order.ID).First(&existing).Error; err == nil {
+		log.Printf("[DeliveryService] delivery order already exists for order %d, skip", order.ID)
+		return nil
+	}
+
+	var store model.Store
+	if err := database.DB.First(&store, order.StoreID).Error; err != nil {
+		return fmt.Errorf("store not found: %w", err)
+	}
+
+	senderLng, _ := strconv.ParseFloat(store.Longitude, 64)
+	senderLat, _ := strconv.ParseFloat(store.Latitude, 64)
+
+	deliveryType := "self"
+	if config.AppConfig.Meituan.Enabled {
+		deliveryType = "meituan"
+	} else if config.AppConfig.Eleme.Enabled {
+		deliveryType = "eleme"
+	}
+
+	deliveryOrder := &model.DeliveryOrder{
+		OrderID:         order.ID,
+		StoreID:         order.StoreID,
+		DeliveryType:    deliveryType,
+		DeliveryStatus:  0,
+		SenderName:      store.Name,
+		SenderPhone:     store.Phone,
+		SenderAddress:   store.Address,
+		SenderLng:       senderLng,
+		SenderLat:       senderLat,
+		ReceiverName:    order.DeliveryContact,
+		ReceiverPhone:   order.DeliveryPhone,
+		ReceiverAddress: order.DeliveryAddress,
+		ReceiverLng:     order.DeliveryLng,
+		ReceiverLat:     order.DeliveryLat,
+		DeliveryFee:     order.DeliveryFee,
+	}
+
+	if deliveryType == "self" && senderLng > 0 && senderLat > 0 && order.DeliveryLng > 0 && order.DeliveryLat > 0 {
+		route, err := s.amapService.PlanRoute(senderLng, senderLat, order.DeliveryLng, order.DeliveryLat)
+		if err == nil {
+			deliveryOrder.Distance = route.Distance
+			deliveryOrder.Duration = route.Duration
+			deliveryOrder.DeliveryFee = route.Fee
+			deliveryOrder.RouteData = route.Route
+		} else {
+			log.Printf("[DeliveryService] amap route planning failed for order %d: %v", order.ID, err)
+		}
+		estTime := time.Now().Add(time.Duration(deliveryOrder.Duration) * time.Minute)
+		deliveryOrder.EstimatedTime = &estTime
+	}
+
+	if err := database.DB.Create(deliveryOrder).Error; err != nil {
+		return fmt.Errorf("create delivery order failed: %w", err)
+	}
+
+	if deliveryType == "meituan" {
+		s.createMeituanDelivery(deliveryOrder)
+	} else if deliveryType == "eleme" {
+		s.createElemeDelivery(deliveryOrder)
+	} else {
+		s.autoAssignRider(deliveryOrder)
+	}
+
+	log.Printf("[DeliveryService] auto created delivery order %d for order %d, type=%s", deliveryOrder.ID, order.ID, deliveryType)
+	return nil
+}
+
+func (s *DeliveryService) autoAssignRider(deliveryOrder *model.DeliveryOrder) {
+	var rider model.Rider
+	if err := database.DB.Where("store_id = ? AND status = 1", deliveryOrder.StoreID).
+		Order("order_count ASC").First(&rider).Error; err != nil {
+		log.Printf("[DeliveryService] no available rider for store %d, delivery order %d pending manual assignment", deliveryOrder.StoreID, deliveryOrder.ID)
+		return
+	}
+
+	now := time.Now()
+	if err := database.DB.Model(deliveryOrder).Updates(map[string]interface{}{
+		"rider_id":         rider.ID,
+		"rider_name":       rider.Name,
+		"rider_phone":      rider.Phone,
+		"rider_lng":        rider.CurrentLng,
+		"rider_lat":        rider.CurrentLat,
+		"delivery_status":  1,
+		"picked_up_at":     &now,
+	}).Error; err != nil {
+		log.Printf("[DeliveryService] assign rider %d to delivery order %d failed: %v", rider.ID, deliveryOrder.ID, err)
+		return
+	}
+
+	database.DB.Model(&rider).Update("order_count", rider.OrderCount+1)
+	log.Printf("[DeliveryService] auto assigned rider %s to delivery order %d, status->1", rider.Name, deliveryOrder.ID)
+}
+
+func (s *DeliveryService) AutoGeneratePickupCode(order *model.Order) error {
+	var existing model.PickupCode
+	if err := database.DB.Where("order_id = ? AND status = 0", order.ID).First(&existing).Error; err == nil {
+		log.Printf("[DeliveryService] active pickup code already exists for order %d, skip", order.ID)
+		return nil
+	}
+
+	code := generatePickupCode()
+	expiredAt := time.Now().Add(2 * time.Hour)
+
+	pickupCode := &model.PickupCode{
+		OrderID:   order.ID,
+		StoreID:   order.StoreID,
+		Code:      code,
+		Status:    0,
+		ExpiredAt: expiredAt,
+	}
+
+	if err := database.DB.Create(pickupCode).Error; err != nil {
+		return fmt.Errorf("create pickup code failed: %w", err)
+	}
+
+	redisKey := fmt.Sprintf("pickup:code:%s", code)
+	redis.Set(redisKey, fmt.Sprintf("%d", order.ID), 2*time.Hour)
+
+	database.DB.Model(&order).Update("pickup_code", code)
+
+	publishData, _ := json.Marshal(map[string]interface{}{
+		"order_id":   order.ID,
+		"order_no":   order.OrderNo,
+		"store_id":   order.StoreID,
+		"code":       code,
+		"expired_at": expiredAt.Format("2006-01-02 15:04:05"),
+		"order_type": order.OrderType,
+	})
+	redis.Publish(fmt.Sprintf("pickup:notify:%d", order.MemberID), string(publishData))
+
+	if err := nsq.PublishPickupCodeReady(order.ID, order.OrderNo, order.StoreID, code, order.OrderType); err != nil {
+		log.Printf("[DeliveryService] publish pickup code ready event failed: %v", err)
+	}
+
+	log.Printf("[DeliveryService] auto generated pickup code %s for order %d", code, order.ID)
+	return nil
 }
 
 var _ = json.Unmarshal

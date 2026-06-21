@@ -468,6 +468,7 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 			delivery.GET("/:id", middleware.JWTAuth(), deliveryHandler.GetDeliveryOrder)
 			delivery.PUT("/:id/status", middleware.JWTAuth(), deliveryHandler.UpdateDeliveryStatus)
 			delivery.POST("/:id/assign-rider", middleware.JWTAuth(), deliveryHandler.AssignRider)
+			delivery.POST("/:id/simulate-location", deliveryHandler.SimulateRiderLocation)
 			delivery.GET("/order/:orderId", deliveryHandler.GetDeliveryOrderByOrderID)
 			delivery.GET("/tracking/:orderId", deliveryHandler.GetDeliveryTracking)
 		}

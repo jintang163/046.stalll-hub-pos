@@ -51,9 +51,10 @@ type DeliveryOrderResponse struct {
 }
 
 type PickupCodeResponse struct {
-	OrderID uint   `json:"order_id"`
-	Code    string `json:"code"`
-	Status  int    `json:"status"`
+	OrderID   uint   `json:"order_id"`
+	Code      string `json:"code"`
+	Status    int    `json:"status"`
+	ExpiredAt string `json:"expired_at,omitempty"`
 }
 
 type RiderLocationUpdate struct {
@@ -127,6 +128,7 @@ type VerifyPickupCodeRequest struct {
 
 type DeliveryTrackingResponse struct {
 	OrderNo         string               `json:"order_no"`
+	DeliveryType    string               `json:"delivery_type"`
 	DeliveryStatus  int                  `json:"delivery_status"`
 	RiderID         uint                 `json:"rider_id"`
 	RiderName       string               `json:"rider_name"`

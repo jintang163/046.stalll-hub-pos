@@ -34,6 +34,7 @@ export interface DeliveryOrder {
 
 export interface DeliveryTracking {
   order_no: string
+  delivery_type: DeliveryType
   delivery_status: number
   rider_id: number
   rider_name: string
@@ -69,6 +70,7 @@ export interface PickupCodeInfo {
   order_id: number
   code: string
   status: number
+  expired_at?: string
 }
 
 export interface RoutePlanResult {
@@ -86,7 +88,7 @@ export interface GeocodeResult {
 
 export const deliveryStatusMap: Record<number, { text: string; color: string }> = {
   0: { text: '待接单', color: '#e6a23c' },
-  1: { text: '骑手取餐中', color: '#409eff' },
+  1: { text: '骑手已接单，取餐中', color: '#409eff' },
   2: { text: '配送中', color: '#409eff' },
   3: { text: '已送达', color: '#67c23a' },
   4: { text: '已取消', color: '#909399' },
@@ -180,5 +182,12 @@ export const geocode = (address: string, city?: string) => {
     url: '/amap/geocode',
     method: 'POST',
     data: { address, city }
+  })
+}
+
+export const simulateRiderLocation = (deliveryId: number) => {
+  return request<{ message: string }>({
+    url: `/delivery/${deliveryId}/simulate-location`,
+    method: 'POST'
   })
 }

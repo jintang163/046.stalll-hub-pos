@@ -5,6 +5,7 @@ import (
 	"log"
 	"stalll-hub-pos/backend/internal/model"
 	"stalll-hub-pos/backend/internal/repository"
+	"stalll-hub-pos/backend/internal/service"
 	"stalll-hub-pos/backend/pkg/database"
 	"stalll-hub-pos/backend/pkg/nsq"
 
@@ -71,6 +72,13 @@ func (c *PaymentSuccessConsumer) HandleMessage(m *nsq.Message) error {
 
 	if err := c.sendOrderStatusNotification(order); err != nil {
 		log.Printf("[PaymentConsumer] Failed to send order status notification for %s: %v", msg.OrderNo, err)
+	}
+
+	if order.OrderType == "delivery" {
+		deliveryService := service.NewDeliveryService()
+		if err := deliveryService.AutoCreateDeliveryOrder(order); err != nil {
+			log.Printf("[PaymentConsumer] Failed to auto create delivery order for %s: %v", msg.OrderNo, err)
+		}
 	}
 
 	log.Printf("[PaymentConsumer] Payment success processed for order %s", msg.OrderNo)

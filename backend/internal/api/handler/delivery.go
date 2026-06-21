@@ -315,3 +315,18 @@ func (h *DeliveryHandler) Geocode(c *gin.Context) {
 
 	middleware.Success(c, resp)
 }
+
+func (h *DeliveryHandler) SimulateRiderLocation(c *gin.Context) {
+	deliveryID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		middleware.Error(c, http.StatusBadRequest, "Invalid delivery order ID")
+		return
+	}
+
+	if err := h.deliveryService.SimulateRiderLocation(uint(deliveryID)); err != nil {
+		middleware.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	middleware.Success(c, gin.H{"message": "Rider location simulated successfully"})
+}
