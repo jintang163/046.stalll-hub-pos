@@ -174,3 +174,16 @@ func (h *AnalyticsHandler) GetProfitSummary(c *gin.Context) {
 
 	middleware.Success(c, summary)
 }
+
+func (h *AnalyticsHandler) TriggerFullBackfill(c *gin.Context) {
+	go func() {
+		if _, _, err := h.chSyncService.FullBackfill(); err != nil {
+			fmt.Printf("Backfill error: %v\n", err)
+		}
+	}()
+	middleware.Success(c, gin.H{"message": "全量回填任务已启动"})
+}
+
+func (h *AnalyticsHandler) GetSyncStatus(c *gin.Context) {
+	middleware.Success(c, gin.H{"status": "running"})
+}

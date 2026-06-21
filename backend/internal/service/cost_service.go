@@ -3,6 +3,8 @@ package service
 import (
 	"fmt"
 	"log"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -32,15 +34,15 @@ func (s *CostService) ImportCostExcel(filePath string, effectiveDate string) (*m
 		return nil, fmt.Errorf("failed to read excel rows: %v", err)
 	}
 
-	if len(rows) < 2 {
-		return nil, fmt.Errorf("excel file is empty or has no data rows")
+	if len(rows) == 0 {
+		return nil, fmt.Errorf("excel file is empty")
 	}
 
 	batchNo := fmt.Sprintf("COST%s%d", time.Now().Format("20060102150405"), time.Now().UnixNano()%10000)
 	batch := &model.CostImportBatch{
 		BatchNo:       batchNo,
 		FileName:      filePath,
-		TotalRows:     len(rows) - 1,
+		TotalRows:     0,
 		Status:        0,
 		EffectiveDate: effectiveDate,
 	}
@@ -49,41 +51,69 @@ func (s *CostService) ImportCostExcel(filePath string, effectiveDate string) (*m
 		return nil, fmt.Errorf("failed to create batch record: %v", err)
 	}
 
+	colMapping := detectColumns(rows[0])
+
+	startRow := 0
+	if colMapping.hasHeader {
+		startRow = 1
+	}
+
+	dataRows := rows[startRow:]
+	batch.TotalRows = len(dataRows)
+
 	successCount := 0
 	failCount := 0
 
-	for i, row := range rows {
-		if i == 0 {
-			continue
-		}
-
-		if len(row) < 3 {
+	for i, row := range dataRows {
+		rowNum := startRow + i + 1
+		if isEmptyRow(row) {
 			failCount++
 			continue
 		}
 
-		productName := row[0]
-		unitCostStr := row[1]
-		priceStr := ""
-		if len(row) >= 3 {
-			priceStr = row[2]
+		productName := getColValue(row, colMapping.nameIdx)
+		costStr := getColValue(row, colMapping.costIdx)
+		priceStr := getColValue(row, colMapping.priceIdx)
+
+		productName = strings.TrimSpace(productName)
+		costStr = strings.TrimSpace(costStr)
+		priceStr = strings.TrimSpace(priceStr)
+
+		if productName == "" {
+			log.Printf("[CostImport] Row %d: product name is empty, skip", rowNum)
+			failCount++
+			continue
 		}
 
-		unitCost, err := decimal.NewFromString(unitCostStr)
-		if err != nil {
+		if costStr == "" {
+			log.Printf("[CostImport] Row %d: cost is empty, skip (product: %s)", rowNum, productName)
+			failCount++
+			continue
+		}
+
+		unitCost, err := parseDecimal(costStr)
+		if err != nil || unitCost.LessThan(decimal.Zero) {
+			log.Printf("[CostImport] Row %d: invalid cost value '%s' (product: %s)", rowNum, costStr, productName)
 			failCount++
 			continue
 		}
 
 		var price decimal.Decimal
 		if priceStr != "" {
-			price, _ = decimal.NewFromString(priceStr)
+			if p, err := parseDecimal(priceStr); err == nil && p.GreaterThanOrEqual(decimal.Zero) {
+				price = p
+			}
 		}
 
 		var product model.Product
 		if err := database.DB.Where("name = ?", productName).First(&product).Error; err != nil {
+			log.Printf("[CostImport] Row %d: product '%s' not found", rowNum, productName)
 			failCount++
 			continue
+		}
+
+		if price.IsZero() && !product.Price.IsZero() {
+			price = product.Price
 		}
 
 		grossProfit := price.Sub(unitCost)
@@ -104,6 +134,7 @@ func (s *CostService) ImportCostExcel(filePath string, effectiveDate string) (*m
 		}
 
 		if err := database.DB.Create(cost).Error; err != nil {
+			log.Printf("[CostImport] Row %d: create cost record failed: %v", rowNum, err)
 			failCount++
 			continue
 		}
@@ -120,6 +151,107 @@ func (s *CostService) ImportCostExcel(filePath string, effectiveDate string) (*m
 
 	log.Printf("[CostImport] Batch %s: total=%d, success=%d, fail=%d", batchNo, batch.TotalRows, successCount, failCount)
 	return batch, nil
+}
+
+type columnMapping struct {
+	nameIdx    int
+	costIdx    int
+	priceIdx   int
+	hasHeader  bool
+}
+
+func detectColumns(headerRow []string) columnMapping {
+	mapping := columnMapping{
+		nameIdx:  0,
+		costIdx:  1,
+		priceIdx: 2,
+	}
+
+	if len(headerRow) == 0 {
+		return mapping
+	}
+
+	nameKeywords := []string{"菜品", "商品", "名称", "product", "name", "菜名"}
+	costKeywords := []string{"成本", "进价", "cost", "unit_cost", "单位成本"}
+	priceKeywords := []string{"售价", "价格", "price", "销售价", "定价"}
+
+	foundName := -1
+	foundCost := -1
+	foundPrice := -1
+
+	for i, cell := range headerRow {
+		cellLower := strings.ToLower(strings.TrimSpace(cell))
+		cellTrim := strings.TrimSpace(cell)
+
+		if foundName == -1 && containsAny(cellLower, cellTrim, nameKeywords) {
+			foundName = i
+		}
+		if foundCost == -1 && containsAny(cellLower, cellTrim, costKeywords) {
+			foundCost = i
+		}
+		if foundPrice == -1 && containsAny(cellLower, cellTrim, priceKeywords) {
+			foundPrice = i
+		}
+	}
+
+	if foundName >= 0 || foundCost >= 0 || foundPrice >= 0 {
+		mapping.hasHeader = true
+		if foundName >= 0 {
+			mapping.nameIdx = foundName
+		}
+		if foundCost >= 0 {
+			mapping.costIdx = foundCost
+		}
+		if foundPrice >= 0 {
+			mapping.priceIdx = foundPrice
+		}
+	}
+
+	return mapping
+}
+
+func containsAny(lower, raw string, keywords []string) bool {
+	for _, kw := range keywords {
+		if strings.Contains(lower, strings.ToLower(kw)) || strings.Contains(raw, kw) {
+			return true
+		}
+	}
+	return false
+}
+
+func getColValue(row []string, idx int) string {
+	if idx >= 0 && idx < len(row) {
+		return row[idx]
+	}
+	return ""
+}
+
+func isEmptyRow(row []string) bool {
+	for _, cell := range row {
+		if strings.TrimSpace(cell) != "" {
+			return false
+		}
+	}
+	return true
+}
+
+func parseDecimal(s string) (decimal.Decimal, error) {
+	s = strings.TrimSpace(s)
+	s = strings.ReplaceAll(s, "¥", "")
+	s = strings.ReplaceAll(s, "￥", "")
+	s = strings.ReplaceAll(s, ",", "")
+	s = strings.ReplaceAll(s, "，", "")
+	s = strings.TrimSpace(s)
+
+	if s == "" {
+		return decimal.Zero, nil
+	}
+
+	if _, err := strconv.ParseFloat(s, 64); err != nil {
+		return decimal.Zero, fmt.Errorf("invalid number: %s", s)
+	}
+
+	return decimal.NewFromString(s)
 }
 
 func (s *CostService) GetCostList(query *dto.CostQueryDTO) ([]model.ProductCost, int64, error) {
@@ -148,8 +280,6 @@ func (s *CostService) GetCostList(query *dto.CostQueryDTO) ([]model.ProductCost,
 }
 
 func (s *CostService) GetProfitReport(query *dto.ProfitReportQueryDTO) ([]dto.ProfitReportResponse, error) {
-	var results []dto.ProfitReportResponse
-
 	startDate := query.StartDate
 	endDate := query.EndDate
 
@@ -165,20 +295,23 @@ func (s *CostService) GetProfitReport(query *dto.ProfitReportQueryDTO) ([]dto.Pr
 		Select(`oi.product_id, oi.product_name, SUM(oi.quantity) as quantity, SUM(oi.subtotal) as revenue`).
 		Joins("LEFT JOIN orders o ON oi.order_id = o.id").
 		Where("o.created_at >= ? AND o.created_at <= ?", startDate+" 00:00:00", endDate+" 23:59:59").
-		Where("o.order_status != ?", -1)
+		Where("o.order_status != ? AND o.pay_status = ? AND oi.status = ?", -1, 1, 1)
 
 	if query.StoreID > 0 {
 		db = db.Where("o.store_id = ?", query.StoreID)
 	}
-	db = db.Group("oi.product_id, oi.product_name").Scan(&salesData)
+	db = db.Group("oi.product_id, oi.product_name").Order("revenue DESC").Scan(&salesData)
 
 	var totalRevenue, totalCost decimal.Decimal
-	var orderCount int64
+	totalRevenue = decimal.Zero
+	totalCost = decimal.Zero
+	_ = totalRevenue
+	_ = totalCost
 
-	database.DB.Model(&model.Order{}).
-		Where("created_at >= ? AND created_at <= ?", startDate+" 00:00:00", endDate+" 23:59:59").
-		Where("order_status != ?", -1).
-		Count(&orderCount)
+	var productIDs []uint
+	for _, s := range salesData {
+		productIDs = append(productIDs, s.ProductID)
+	}
 
 	type ProductCostRow struct {
 		ProductID uint
@@ -186,16 +319,11 @@ func (s *CostService) GetProfitReport(query *dto.ProfitReportQueryDTO) ([]dto.Pr
 	}
 
 	var costRows []ProductCostRow
-	if len(salesData) > 0 {
-		productIDs := make([]uint, len(salesData))
-		for i, s := range salesData {
-			productIDs[i] = s.ProductID
-		}
-
+	if len(productIDs) > 0 {
 		database.DB.Model(&model.ProductCost{}).
 			Where("product_id IN ? AND effective_date <= ?", productIDs, endDate).
-			Group("product_id").
 			Select("product_id, MAX(unit_cost) as unit_cost").
+			Group("product_id").
 			Scan(&costRows)
 	}
 
@@ -204,6 +332,7 @@ func (s *CostService) GetProfitReport(query *dto.ProfitReportQueryDTO) ([]dto.Pr
 		costMap[c.ProductID] = c.UnitCost
 	}
 
+	var results []dto.ProfitReportResponse
 	for _, s := range salesData {
 		unitCost, hasCost := costMap[s.ProductID]
 		if !hasCost {
@@ -217,9 +346,6 @@ func (s *CostService) GetProfitReport(query *dto.ProfitReportQueryDTO) ([]dto.Pr
 			grossMargin = grossProfit.Div(s.Revenue).Mul(decimal.NewFromInt(100))
 		}
 
-		totalRevenue = totalRevenue.Add(s.Revenue)
-		totalCost = totalCost.Add(totalProductCost)
-
 		results = append(results, dto.ProfitReportResponse{
 			ProductID:    s.ProductID,
 			ProductName:  s.ProductName,
@@ -231,14 +357,6 @@ func (s *CostService) GetProfitReport(query *dto.ProfitReportQueryDTO) ([]dto.Pr
 			GrossMargin:  grossMargin,
 		})
 	}
-
-	var overallGrossMargin decimal.Decimal
-	overallGrossProfit := totalRevenue.Sub(totalCost)
-	if totalRevenue.GreaterThan(decimal.Zero) {
-		overallGrossMargin = overallGrossProfit.Div(totalRevenue).Mul(decimal.NewFromInt(100))
-	}
-
-	_ = orderCount
 
 	return results, nil
 }
@@ -265,10 +383,10 @@ func (s *CostService) GetProfitSummary(query *dto.ProfitReportQueryDTO) (*dto.Pr
 	}
 
 	return &dto.ProfitSummaryResponse{
-		TotalRevenue:  totalRevenue,
-		TotalCost:     totalCost,
-		GrossProfit:   grossProfit,
-		GrossMargin:   grossMargin,
-		ProductCount:  productCount,
+		TotalRevenue: totalRevenue,
+		TotalCost:    totalCost,
+		GrossProfit:  grossProfit,
+		GrossMargin:  grossMargin,
+		ProductCount: productCount,
 	}, nil
 }

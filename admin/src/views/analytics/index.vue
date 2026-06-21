@@ -3,7 +3,7 @@
     <div class="page-header">
       <h2 class="page-title">营业报表分析</h2>
       <div class="header-actions">
-        <el-radio-group v-model="reportType" @change="handleReportTypeChange">
+        <el-radio-group v-model="reportType" @change="fetchAllData">
           <el-radio-button value="daily">日报</el-radio-button>
           <el-radio-button value="monthly">月报</el-radio-button>
         </el-radio-group>
@@ -15,12 +15,18 @@
           end-placeholder="结束日期"
           value-format="YYYY-MM-DD"
           style="width: 280px" />
-        <el-select v-model="storeId" placeholder="选择门店" clearable style="width: 160px">
+        <el-select v-model="storeId" placeholder="选择门店" clearable style="width: 160px" @change="fetchAllData">
           <el-option label="全部门店" :value="0" />
           <el-option v-for="store in storeList" :key="store.id" :label="store.name" :value="store.id" />
         </el-select>
         <el-button type="primary" @click="fetchAllData">
           <el-icon><Search /></el-icon>查询
+        </el-button>
+        <el-button type="warning" @click="handleBackfill" v-if="!backfilling">
+          <el-icon><Refresh /></el-icon>全量回填
+        </el-button>
+        <el-button type="warning" disabled v-else>
+          <el-icon class="is-loading" :size="14"><Loading /></el-icon>回填中...
         </el-button>
       </div>
     </div>
@@ -45,7 +51,7 @@
             </div>
             <div class="card-info">
               <div class="card-label">订单数</div>
-              <div class="card-value">{{ summary.orderCount || 0 }}</div>
+              <div class="card-value">{{ summary.orderCount }}</div>
             </div>
           </div>
         </el-col>
@@ -66,7 +72,7 @@
               <el-icon :size="28"><Goods /></el-icon>
             </div>
             <div class="card-info">
-              <div class="card-label">在售商品</div>
+              <div class="card-label">热门菜品</div>
               <div class="card-value">{{ topProducts.length }}</div>
             </div>
           </div>
@@ -92,9 +98,14 @@
     <el-row :gutter="20" class="chart-row">
       <el-col :span="24">
         <div class="chart-container">
-          <div class="chart-title">营业额详情</div>
-          <el-table :data="revenueList" v-loading="loading" border>
-            <el-table-column prop="store_name" label="门店" width="160" />
+          <div class="chart-title">{{ reportType === 'monthly' ? '月度' : '每日' }}营业明细</div>
+          <el-table :data="revenueList" v-loading="loading" border stripe>
+            <el-table-column prop="report_date" label="日期" width="140" align="center" />
+            <el-table-column prop="store_id" label="门店ID" width="100" align="center">
+              <template #default="{ row }">
+                {{ getStoreName(row.store_id) }}
+              </template>
+            </el-table-column>
             <el-table-column prop="total_revenue" label="总营业额(元)" width="180" align="center">
               <template #default="{ row }">
                 <span class="amount">¥{{ formatAmount(row.total_revenue) }}</span>
@@ -115,7 +126,7 @@
       <el-col :span="24">
         <div class="chart-container">
           <div class="chart-title">热门菜品排行</div>
-          <el-table :data="topProducts" v-loading="loading" border>
+          <el-table :data="topProducts" v-loading="loading" border stripe>
             <el-table-column type="index" label="排名" width="80" align="center">
               <template #default="{ $index }">
                 <span :class="['rank-badge', $index < 3 ? 'top3' : '']">{{ $index + 1 }}</span>
@@ -140,12 +151,15 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import { Search, Money, List, User, Goods } from '@element-plus/icons-vue'
-import { getRevenueReport, getHourlyTrend, getTopProducts } from '@/api/analytics'
+import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
+import { ElMessage } from 'element-plus'
+import { Search, Money, List, User, Goods, Refresh, Loading } from '@element-plus/icons-vue'
+import { getRevenueReport, getHourlyTrend, getTopProducts, triggerBackfill } from '@/api/analytics'
+import { storeApi } from '@/api/stores'
 import * as echarts from 'echarts'
 
 const loading = ref(false)
+const backfilling = ref(false)
 const reportType = ref('daily')
 const storeId = ref(0)
 const storeList = ref([])
@@ -167,7 +181,10 @@ const formatDate = (d) => {
   return `${year}-${month}-${day}`
 }
 
-const dateRange = ref([formatDate(new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)), formatDate(today)])
+const dateRange = ref([
+  formatDate(new Date(today.getFullYear(), today.getMonth(), 1)),
+  formatDate(today)
+])
 
 const hourlyChartRef = ref(null)
 const topProductsChartRef = ref(null)
@@ -175,20 +192,30 @@ let hourlyChart = null
 let topProductsChart = null
 
 function formatAmount(val) {
-  if (!val) return '0.00'
+  if (!val && val !== 0) return '0.00'
   return Number(val).toFixed(2)
 }
 
-function handleReportTypeChange() {
-  fetchAllData()
+function getStoreName(id) {
+  const store = storeList.value.find(s => s.id === id)
+  return store ? store.name : `门店${id}`
 }
 
 function getQueryParams() {
   return {
-    store_id: storeId.value,
+    store_id: storeId.value || 0,
     start_date: dateRange.value?.[0] || '',
     end_date: dateRange.value?.[1] || '',
     report_type: reportType.value
+  }
+}
+
+async function fetchStores() {
+  try {
+    const res = await storeApi.list({ page: 1, page_size: 100 })
+    storeList.value = res?.list || res?.data || []
+  } catch (e) {
+    console.error('Failed to fetch stores:', e)
   }
 }
 
@@ -208,7 +235,7 @@ async function fetchAllData() {
 async function fetchRevenueReport() {
   try {
     const res = await getRevenueReport(getQueryParams())
-    revenueList.value = res || []
+    revenueList.value = res?.data?.list || res?.data || res || []
     let totalRev = 0
     let totalOrd = 0
     for (const r of revenueList.value) {
@@ -219,17 +246,17 @@ async function fetchRevenueReport() {
     summary.orderCount = totalOrd
     summary.avgOrderAmount = totalOrd > 0 ? totalRev / totalOrd : 0
   } catch (e) {
-    console.error(e)
+    console.error('fetchRevenueReport error:', e)
   }
 }
 
 async function fetchHourlyTrend() {
   try {
     const res = await getHourlyTrend(getQueryParams())
-    hourlyData.value = res || []
+    hourlyData.value = res?.data || res || []
     renderHourlyChart()
   } catch (e) {
-    console.error(e)
+    console.error('fetchHourlyTrend error:', e)
   }
 }
 
@@ -237,10 +264,24 @@ async function fetchTopProducts() {
   try {
     const params = { ...getQueryParams(), top_n: 10 }
     const res = await getTopProducts(params)
-    topProducts.value = res || []
+    topProducts.value = res?.data?.list || res?.data || res || []
     renderTopProductsChart()
   } catch (e) {
-    console.error(e)
+    console.error('fetchTopProducts error:', e)
+  }
+}
+
+async function handleBackfill() {
+  try {
+    backfilling.value = true
+    await triggerBackfill()
+    ElMessage.success('全量回填任务已启动，请稍后刷新查看')
+    setTimeout(() => {
+      backfilling.value = false
+    }, 30000)
+  } catch (e) {
+    backfilling.value = false
+    ElMessage.error('启动回填失败')
   }
 }
 
@@ -255,7 +296,7 @@ function renderHourlyChart() {
   const revenues = Array(24).fill(0)
 
   for (const d of hourlyData.value) {
-    const h = d.hour
+    const h = Number(d.hour)
     if (h >= 0 && h < 24) {
       orderCounts[h] = d.order_count || 0
       revenues[h] = Number(d.revenue || 0)
@@ -276,7 +317,7 @@ function renderHourlyChart() {
     xAxis: {
       type: 'category',
       data: hours,
-      axisLabel: { interval: 1 }
+      axisLabel: { interval: 2 }
     },
     yAxis: [
       {
@@ -383,6 +424,7 @@ function handleResize() {
 }
 
 onMounted(async () => {
+  await fetchStores()
   await fetchAllData()
   window.addEventListener('resize', handleResize)
 })
@@ -396,10 +438,20 @@ onBeforeUnmount(() => {
 
 <style scoped lang="scss">
 .analytics-page {
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
   .header-actions {
     display: flex;
     gap: 12px;
     align-items: center;
+    flex-wrap: wrap;
   }
 
   .summary-cards {

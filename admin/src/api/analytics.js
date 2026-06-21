@@ -24,6 +24,20 @@ export function getTopProducts(params) {
   })
 }
 
+export function triggerBackfill() {
+  return request({
+    url: '/analytics/sync/backfill',
+    method: 'post'
+  })
+}
+
+export function getSyncStatus() {
+  return request({
+    url: '/analytics/sync/status',
+    method: 'get'
+  })
+}
+
 export function importCostExcel(formData) {
   return request({
     url: '/analytics/cost/import',

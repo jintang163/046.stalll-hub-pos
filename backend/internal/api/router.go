@@ -416,6 +416,8 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 			analytics.GET("/revenue", analyticsHandler.GetRevenueReport)
 			analytics.GET("/hourly-trend", analyticsHandler.GetHourlyTrend)
 			analytics.GET("/top-products", analyticsHandler.GetTopProducts)
+			analytics.POST("/sync/backfill", analyticsHandler.TriggerFullBackfill)
+			analytics.GET("/sync/status", analyticsHandler.GetSyncStatus)
 			analytics.POST("/cost/import", analyticsHandler.ImportCostExcel)
 			analytics.GET("/cost/list", analyticsHandler.GetCostList)
 			analytics.GET("/profit/report", analyticsHandler.GetProfitReport)

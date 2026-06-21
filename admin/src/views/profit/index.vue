@@ -11,8 +11,9 @@
           end-placeholder="结束日期"
           value-format="YYYY-MM-DD"
           style="width: 280px" />
-        <el-select v-model="storeId" placeholder="选择门店" clearable style="width: 160px">
+        <el-select v-model="storeId" placeholder="选择门店" clearable style="width: 160px" @change="fetchData">
           <el-option label="全部门店" :value="0" />
+          <el-option v-for="store in storeList" :key="store.id" :label="store.name" :value="store.id" />
         </el-select>
         <el-button type="primary" @click="fetchData">
           <el-icon><Search /></el-icon>查询
@@ -67,13 +68,13 @@
     <el-row :gutter="20" class="chart-row">
       <el-col :span="12">
         <div class="chart-container">
-          <div class="chart-title">营收与成本对比</div>
+          <div class="chart-title">营收与成本对比 TOP10</div>
           <div ref="compareChartRef" style="height: 380px;"></div>
         </div>
       </el-col>
       <el-col :span="12">
         <div class="chart-container">
-          <div class="chart-title">毛利率分布</div>
+          <div class="chart-title">毛利率分布 TOP10</div>
           <div ref="marginChartRef" style="height: 380px;"></div>
         </div>
       </el-col>
@@ -111,10 +112,10 @@
             </span>
           </template>
         </el-table-column>
-        <el-table-column prop="gross_margin" label="毛利率" width="120" align="center">
+        <el-table-column prop="gross_margin" label="毛利率" width="160" align="center">
           <template #default="{ row }">
             <el-progress
-              :percentage="Number(row.gross_margin) || 0"
+              :percentage="clampPercent(Number(row.gross_margin))"
               :stroke-width="10"
               :color="getMarginColor(Number(row.gross_margin))"
               :format="() => formatMargin(row.gross_margin) + '%'" />
@@ -143,7 +144,8 @@
             <el-button type="primary">选择Excel文件</el-button>
             <template #tip>
               <div class="upload-tip">
-                Excel格式: 第1列=菜品名称, 第2列=单位成本, 第3列=售价(可选)
+                Excel格式: 第1列=菜品名称, 第2列=单位成本, 第3列=售价(可选)<br/>
+                支持表头跳过、自动识别列，列数不足会自动补默认值
               </div>
             </template>
           </el-upload>
@@ -162,6 +164,7 @@ import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Search, Upload, Money, ShoppingCart, TrendCharts, DataAnalysis } from '@element-plus/icons-vue'
 import { getProfitReport, getProfitSummary, importCostExcel } from '@/api/analytics'
+import { storeApi } from '@/api/stores'
 import * as echarts from 'echarts'
 
 const loading = ref(false)
@@ -169,6 +172,7 @@ const importLoading = ref(false)
 const importDialogVisible = ref(false)
 const importDate = ref('')
 const storeId = ref(0)
+const storeList = ref([])
 const profitReport = ref([])
 const uploadFile = ref(null)
 
@@ -188,7 +192,10 @@ const formatDate = (d) => {
   return `${year}-${month}-${day}`
 }
 
-const dateRange = ref([formatDate(new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)), formatDate(today)])
+const dateRange = ref([
+  formatDate(new Date(today.getFullYear(), today.getMonth(), 1)),
+  formatDate(today)
+])
 
 const compareChartRef = ref(null)
 const marginChartRef = ref(null)
@@ -196,13 +203,21 @@ let compareChart = null
 let marginChart = null
 
 function formatAmount(val) {
-  if (!val) return '0.00'
+  if (!val && val !== 0) return '0.00'
   return Number(val).toFixed(2)
 }
 
 function formatMargin(val) {
-  if (!val) return '0.0'
+  if (!val && val !== 0) return '0.0'
   return Number(val).toFixed(1)
+}
+
+function clampPercent(val) {
+  if (!val && val !== 0) return 0
+  const v = Number(val)
+  if (v < 0) return 0
+  if (v > 100) return 100
+  return v
 }
 
 function getMarginColor(margin) {
@@ -237,7 +252,8 @@ async function submitImport() {
     formData.append('file', uploadFile.value)
     formData.append('effective_date', importDate.value)
     const res = await importCostExcel(formData)
-    ElMessage.success(`导入成功: 成功${res.success_count}条, 失败${res.fail_count}条`)
+    const data = res?.data || res
+    ElMessage.success(`导入成功: 成功${data.success_count || 0}条, 失败${data.fail_count || 0}条`)
     importDialogVisible.value = false
     fetchData()
   } catch (e) {
@@ -249,9 +265,18 @@ async function submitImport() {
 
 function getQueryParams() {
   return {
-    store_id: storeId.value,
+    store_id: storeId.value || 0,
     start_date: dateRange.value?.[0] || '',
     end_date: dateRange.value?.[1] || ''
+  }
+}
+
+async function fetchStores() {
+  try {
+    const res = await storeApi.list({ page: 1, page_size: 100 })
+    storeList.value = res?.list || res?.data || []
+  } catch (e) {
+    console.error('Failed to fetch stores:', e)
   }
 }
 
@@ -263,8 +288,9 @@ async function fetchData() {
       getProfitReport(getQueryParams())
     ])
 
-    Object.assign(profitSummary, summaryRes || {})
-    profitReport.value = reportRes || []
+    const s = summaryRes?.data || summaryRes || {}
+    Object.assign(profitSummary, s)
+    profitReport.value = reportRes?.data?.list || reportRes?.data || reportRes || []
 
     renderCompareChart()
     renderMarginChart()
@@ -382,7 +408,8 @@ function handleResize() {
   marginChart?.resize()
 }
 
-onMounted(() => {
+onMounted(async () => {
+  await fetchStores()
   fetchData()
   window.addEventListener('resize', handleResize)
 })
@@ -396,10 +423,20 @@ onBeforeUnmount(() => {
 
 <style scoped lang="scss">
 .profit-page {
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
   .header-actions {
     display: flex;
     gap: 12px;
     align-items: center;
+    flex-wrap: wrap;
   }
 
   .summary-cards {
@@ -503,6 +540,7 @@ onBeforeUnmount(() => {
     color: #909399;
     font-size: 12px;
     margin-top: 4px;
+    line-height: 1.6;
   }
 }
 </style>

@@ -2,6 +2,7 @@ package config
 
 import (
 	"log"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -97,8 +98,11 @@ func LoadConfig() {
 	viper.AddConfigPath("./config")
 	viper.AddConfigPath(".")
 
+	viper.AutomaticEnv()
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+
 	if err := viper.ReadInConfig(); err != nil {
-		log.Fatalf("Failed to read config file: %v", err)
+		log.Printf("Warning: config file not found, using environment variables and defaults: %v", err)
 	}
 
 	AppConfig = &Config{}

@@ -24,8 +24,8 @@ func InitClickHouse() {
 		log.Fatalf("Failed to open ClickHouse connection: %v", err)
 	}
 
-	DB.SetMaxOpenConns(5)
-	DB.SetMaxIdleConns(2)
+	DB.SetMaxOpenConns(10)
+	DB.SetMaxIdleConns(3)
 	DB.SetConnMaxLifetime(time.Hour)
 
 	if err := DB.Ping(); err != nil {
@@ -57,26 +57,39 @@ func initSchema() {
 			source          String,
 			created_at      DateTime,
 			created_date    Date MATERIALIZED toDate(created_at),
-			created_hour    UInt8 MATERIALIZED toHour(created_at)
-		) ENGINE = MergeTree()
+			created_hour    UInt8 MATERIALIZED toHour(created_at),
+			updated_at      DateTime DEFAULT now()
+		) ENGINE = ReplacingMergeTree(updated_at)
 		PARTITION BY toYYYYMM(created_at)
-		ORDER BY (store_id, created_at)`,
+		ORDER BY (store_id, order_id)`,
 		`CREATE TABLE IF NOT EXISTS stall_hub_pos.ch_order_items (
 			item_id         UInt64,
 			order_id        UInt64,
 			product_id      UInt64,
 			sku_id          UInt64,
 			stall_id        UInt64,
+			store_id        UInt64,
 			product_name    String,
 			sku_name        String,
 			price           Decimal(10,2),
 			quantity        Int32,
 			subtotal        Decimal(10,2),
+			status          Int32,
 			created_at      DateTime,
-			created_date    Date MATERIALIZED toDate(created_at)
-		) ENGINE = MergeTree()
+			created_date    Date MATERIALIZED toDate(created_at),
+			updated_at      DateTime DEFAULT now()
+		) ENGINE = ReplacingMergeTree(updated_at)
 		PARTITION BY toYYYYMM(created_at)
-		ORDER BY (product_id, created_at)`,
+		ORDER BY (store_id, item_id)`,
+		`CREATE TABLE IF NOT EXISTS stall_hub_pos.ch_sync_watermark (
+			sync_type   String,
+			store_id    UInt64,
+			last_sync_id UInt64,
+			last_sync_time DateTime,
+			sync_status Int32,
+			updated_at  DateTime DEFAULT now()
+		) ENGINE = ReplacingMergeTree(updated_at)
+		ORDER BY (sync_type, store_id)`,
 	}
 
 	for _, q := range queries {
@@ -84,5 +97,40 @@ func initSchema() {
 			log.Printf("ClickHouse schema init (may already exist): %v", err)
 		}
 	}
-	log.Println("ClickHouse schema initialized")
+	log.Println("ClickHouse schema initialized (ReplacingMergeTree)")
+}
+
+func OptimizeTable(table string) {
+	ctx := context.Background()
+	query := fmt.Sprintf("OPTIMIZE TABLE stall_hub_pos.%s FINAL", table)
+	if err := DB.ExecContext(ctx, query); err != nil {
+		log.Printf("ClickHouse optimize %s: %v", table, err)
+	}
+}
+
+func GetWatermark(syncType string, storeID uint) (uint64, time.Time, error) {
+	ctx := context.Background()
+	var lastID uint64
+	var lastTime time.Time
+
+	row := DB.QueryRowContext(ctx,
+		`SELECT last_sync_id, last_sync_time FROM stall_hub_pos.ch_sync_watermark 
+		 WHERE sync_type = ? AND store_id = ? ORDER BY updated_at DESC LIMIT 1`,
+		syncType, storeID)
+
+	err := row.Scan(&lastID, &lastTime)
+	if err == sql.ErrNoRows {
+		return 0, time.Time{}, nil
+	}
+	return lastID, lastTime, err
+}
+
+func UpdateWatermark(syncType string, storeID uint, lastID uint64, lastTime time.Time, status int32) error {
+	ctx := context.Background()
+	_, err := DB.ExecContext(ctx,
+		`INSERT INTO stall_hub_pos.ch_sync_watermark 
+		 (sync_type, store_id, last_sync_id, last_sync_time, sync_status) 
+		 VALUES (?, ?, ?, ?, ?)`,
+		syncType, storeID, lastID, lastTime, status)
+	return err
 }
