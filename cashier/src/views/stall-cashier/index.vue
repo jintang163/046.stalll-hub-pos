@@ -143,6 +143,28 @@
               <div class="product-stock" :class="{ 'low-stock': isLowStock(product) }">
                 库存: {{ getTotalStock(product) }}
               </div>
+              <div v-if="!soldOutMode && product.status" class="product-quick-actions">
+                <el-button
+                  v-if="isProductSoldOut(product)"
+                  size="small"
+                  type="success"
+                  :icon="CircleCheck"
+                  @click.stop="quickToggleSoldOut(product, false)"
+                  :loading="submittingSoldOut"
+                >
+                  恢复
+                </el-button>
+                <el-button
+                  v-else
+                  size="small"
+                  type="warning"
+                  :icon="Warning"
+                  @click.stop="quickToggleSoldOut(product, true)"
+                  :loading="submittingSoldOut"
+                >
+                  沽清
+                </el-button>
+              </div>
             </div>
           </div>
         </div>
@@ -516,7 +538,7 @@ async function handleBatchSoldOut() {
     }
     
     if (window.electronAPI) {
-      await window.electronAPI.invoke('db:batchUpdateSoldOut', selectedSKUIds.value, true)
+      await window.electronAPI.batchUpdateSoldOut(selectedSKUIds.value, true)
     }
     
     await updateProductsSoldOutStatus(selectedSKUIds.value, true)
@@ -562,7 +584,7 @@ async function handleBatchRestore() {
     }
     
     if (window.electronAPI) {
-      await window.electronAPI.invoke('db:batchUpdateSoldOut', selectedSKUIds.value, false)
+      await window.electronAPI.batchUpdateSoldOut(selectedSKUIds.value, false)
     }
     
     await updateProductsSoldOutStatus(selectedSKUIds.value, false)
@@ -588,6 +610,56 @@ function updateProductsSoldOutStatus(skuIds, isSoldOut) {
       })
     }
   })
+}
+
+async function quickToggleSoldOut(product, isSoldOut) {
+  const skuIds = getProductSKUIds(product)
+  if (skuIds.length === 0) return
+
+  const action = isSoldOut ? '沽清' : '恢复'
+  try {
+    await ElMessageBox.confirm(
+      `确定要${action}商品「${product.name}」吗？`,
+      `确认${action}`,
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: isSoldOut ? 'warning' : 'success',
+      }
+    )
+  } catch {
+    return
+  }
+
+  submittingSoldOut.value = true
+  try {
+    if (isOnline.value) {
+      if (isSoldOut) {
+        await batchSoldOut({
+          sku_ids: skuIds,
+          source: 'stall_pos_quick',
+        })
+      } else {
+        await batchRestoreSoldOut({
+          sku_ids: skuIds,
+          source: 'stall_pos_quick',
+        })
+      }
+    }
+
+    if (window.electronAPI) {
+      await window.electronAPI.batchUpdateSoldOut(skuIds, isSoldOut)
+    }
+
+    updateProductsSoldOutStatus(skuIds, isSoldOut)
+
+    ElMessage.success(`成功${action}商品「${product.name}」`)
+  } catch (error) {
+    console.error(`快速${action}失败:`, error)
+    ElMessage.error(`${action}失败: ` + (error.message || '未知错误'))
+  } finally {
+    submittingSoldOut.value = false
+  }
 }
 
 function openSKUSelector(product) {
@@ -1195,6 +1267,12 @@ onBeforeUnmount(() => {
         color: #909399;
 
         &.low-stock { color: #e6a23c; }
+      }
+
+      .product-quick-actions {
+        margin-top: 8px;
+        display: flex;
+        justify-content: flex-end;
       }
     }
   }

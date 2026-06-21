@@ -172,6 +172,22 @@
   border-radius: 6rpx;
 }
 
+.soldOutTag {
+  padding: 4rpx 12rpx;
+  background: #e6a23c;
+  color: #fff;
+  font-size: 20rpx;
+  border-radius: 6rpx;
+}
+
+.productCardSoldOut {
+  opacity: 0.6;
+}
+
+.productCardSoldOut .addButton {
+  background: #ccc;
+}
+
 .productDesc {
   font-size: 24rpx;
   color: #999;

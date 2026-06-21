@@ -30,9 +30,10 @@ type WaiterWSClient struct {
 }
 
 type WaiterHandler struct {
-	orderService *service.OrderService
-	wsClients    map[uint][]*WaiterWSClient
-	wsMutex      sync.RWMutex
+	orderService   *service.OrderService
+	productService *service.ProductService
+	wsClients      map[uint][]*WaiterWSClient
+	wsMutex        sync.RWMutex
 }
 
 var waiterHandlerInstance *WaiterHandler
@@ -40,8 +41,9 @@ var waiterHandlerInstance *WaiterHandler
 func NewWaiterHandler() *WaiterHandler {
 	if waiterHandlerInstance == nil {
 		waiterHandlerInstance = &WaiterHandler{
-			orderService: service.NewOrderService(),
-			wsClients:    make(map[uint][]*WaiterWSClient),
+			orderService:   service.NewOrderService(),
+			productService: service.NewProductService(),
+			wsClients:      make(map[uint][]*WaiterWSClient),
 		}
 		go waiterHandlerInstance.listenRedisPubSub()
 	}
@@ -65,6 +67,10 @@ func (h *WaiterHandler) UpdateItemCookStatus(c *gin.Context) {
 		Update("cook_status", req.CookStatus).Error; err != nil {
 		middleware.Error(c, http.StatusInternalServerError, "Failed to update cook status: "+err.Error())
 		return
+	}
+
+	if req.CookStatus >= 2 {
+		h.autoRestoreSoldOutByOrderItems(req.OrderItemIDs, "kitchen_cook_done")
 	}
 
 	for _, itemID := range req.OrderItemIDs {
@@ -95,6 +101,8 @@ func (h *WaiterHandler) MarkItemsServed(c *gin.Context) {
 		middleware.Error(c, http.StatusInternalServerError, "Failed to mark items as served: "+err.Error())
 		return
 	}
+
+	h.autoRestoreSoldOutByOrderItems(req.OrderItemIDs, "kitchen_served")
 
 	for _, itemID := range req.OrderItemIDs {
 		var item model.OrderItem
@@ -276,6 +284,62 @@ func (h *WaiterHandler) broadcast(storeID uint, msg interface{}) {
 			log.Printf("[WaiterWS] write error: %v", err)
 		}
 	}
+}
+
+func (h *WaiterHandler) autoRestoreSoldOutByOrderItems(orderItemIDs []uint, source string) {
+	if len(orderItemIDs) == 0 {
+		return
+	}
+
+	var items []model.OrderItem
+	if err := database.DB.Where("id IN ?", orderItemIDs).Find(&items).Error; err != nil {
+		log.Printf("[Waiter] query order items failed: %v", err)
+		return
+	}
+
+	if len(items) == 0 {
+		return
+	}
+
+	skuIDSet := make(map[uint]bool)
+	var storeID uint
+	for _, item := range items {
+		if item.SKUID > 0 {
+			skuIDSet[item.SKUID] = true
+		}
+		if storeID == 0 {
+			storeID = getStoreIDByOrderID(item.OrderID)
+		}
+	}
+
+	if len(skuIDSet) == 0 {
+		return
+	}
+
+	skuIDs := make([]uint, 0, len(skuIDSet))
+	for id := range skuIDSet {
+		skuIDs = append(skuIDs, id)
+	}
+
+	restoreDTO := &dto.SoldOutBatchDTO{
+		StoreID:      storeID,
+		SKUIds:       skuIDs,
+		OperatorName: "后厨系统",
+		Source:       source,
+		Remark:       "制作完成自动恢复可售",
+	}
+
+	if err := h.productService.BatchRestoreSoldOut(restoreDTO); err != nil {
+		log.Printf("[Waiter] auto restore sold out failed: %v", err)
+	}
+}
+
+func getStoreIDByOrderID(orderID uint) uint {
+	var order model.Order
+	if err := database.DB.Select("store_id").Where("id = ?", orderID).First(&order).Error; err != nil {
+		return 0
+	}
+	return order.StoreID
 }
 
 func (h *WaiterHandler) publishOrderUpdate(orderID uint) {

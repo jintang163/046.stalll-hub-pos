@@ -86,6 +86,9 @@ func (s *OrderService) Create(req *dto.CreateOrderRequest) (*dto.CreateOrderResp
 		if sku.Status != 1 {
 			return nil, errors.New("SKU is offline")
 		}
+		if sku.IsSoldOut {
+			return nil, fmt.Errorf("SKU \"%s\" is sold out, please choose another dish", sku.SpecName)
+		}
 
 		product, err := s.productRepo.GetByID(item.ProductID)
 		if err != nil {

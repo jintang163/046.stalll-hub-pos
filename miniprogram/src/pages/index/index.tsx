@@ -93,7 +93,13 @@ const Index: React.FC = () => {
   const handleAddClick = (e: React.MouseEvent, product: Product) => {
     e.stopPropagation()
     
-    const availableSkus = product.skus.filter(s => s.status === 1)
+    const soldOutSkus = product.skus.filter(s => s.is_sold_out)
+    if (soldOutSkus.length === product.skus.length) {
+      Taro.showToast({ title: '该商品已沽清', icon: 'none' })
+      return
+    }
+    
+    const availableSkus = product.skus.filter(s => s.status === 1 && !s.is_sold_out)
     const availableAttrs = product.attributes.filter(a => a.status === 1 && a.values.some(v => v.status === 1))
     
     if (availableSkus.length === 1 && availableAttrs.length === 0) {
@@ -110,7 +116,7 @@ const Index: React.FC = () => {
   }
 
   const handleSkuSelect = (sku: SKU) => {
-    if (sku.status !== 1 || sku.stock <= 0) return
+    if (sku.status !== 1 || sku.stock <= 0 || sku.is_sold_out) return
     setSelectedSku(sku)
   }
 
@@ -228,10 +234,12 @@ const Index: React.FC = () => {
         </ScrollView>
 
         <ScrollView scrollY className={styles.productList}>
-          {products.map(product => (
+          {products.map(product => {
+            const isAllSoldOut = product.skus.length > 0 && product.skus.every(s => s.is_sold_out)
+            return (
             <View
               key={product.id}
-              className={styles.productCard}
+              className={`${styles.productCard} ${isAllSoldOut ? styles.productCardSoldOut : ''}`}
               onClick={() => handleProductClick(product)}
             >
               <Image
@@ -243,6 +251,7 @@ const Index: React.FC = () => {
                   <Text className={styles.productName}>{product.name}</Text>
                   {product.is_hot && <View className={styles.hotTag}>热销</View>}
                   {product.is_recommend && <View className={styles.recommendTag}>推荐</View>}
+                  {isAllSoldOut && <View className={styles.soldOutTag}>沽清</View>}
                 </View>
                 <Text className={styles.productDesc} numberOfLines={2}>{product.description}</Text>
                 <View className={styles.productFooter}>
@@ -259,7 +268,8 @@ const Index: React.FC = () => {
                 </View>
               </View>
             </View>
-          ))}
+            )
+          })}
 
           {loading && products.length > 0 && (
             <View className={styles.loadingMore}>
@@ -340,10 +350,11 @@ const Index: React.FC = () => {
                   {selectedProduct.skus.map(sku => (
                     <View
                       key={sku.id}
-                      className={`${styles.skuOption} ${selectedSku?.id === sku.id ? styles.skuOptionActive : ''} ${sku.status !== 1 || sku.stock <= 0 ? styles.skuOptionDisabled : ''}`}
+                      className={`${styles.skuOption} ${selectedSku?.id === sku.id ? styles.skuOptionActive : ''} ${sku.status !== 1 || sku.stock <= 0 || sku.is_sold_out ? styles.skuOptionDisabled : ''}`}
                       onClick={() => handleSkuSelect(sku)}
                     >
                       <Text>{sku.spec_name}</Text>
+                      {sku.is_sold_out && <Text className={styles.skuOptionPrice}>（沽清）</Text>}
                       <Text className={styles.skuOptionPrice}>¥{sku.price.toFixed(2)}</Text>
                     </View>
                   ))}

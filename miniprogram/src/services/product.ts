@@ -18,6 +18,7 @@ export interface SKU {
   stock: number
   image: string
   status: number
+  is_sold_out: boolean
 }
 
 export interface AttributeValue {
