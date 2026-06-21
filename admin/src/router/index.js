@@ -63,6 +63,24 @@ const routes = [
         meta: { title: '营销活动', icon: 'Present' }
       },
       {
+        path: 'sms',
+        name: 'SmsMarketing',
+        component: () => import('@/views/sms/index.vue'),
+        meta: { title: '短信营销', icon: 'Message' }
+      },
+      {
+        path: 'sms/templates',
+        name: 'SmsTemplates',
+        component: () => import('@/views/sms/templates.vue'),
+        meta: { title: '短信模板', icon: 'Document' }
+      },
+      {
+        path: 'sms/tasks',
+        name: 'SmsTasks',
+        component: () => import('@/views/sms/tasks.vue'),
+        meta: { title: '短信任务', icon: 'List' }
+      },
+      {
         path: 'time-slot-pricing',
         name: 'TimeSlotPricing',
         component: () => import('@/views/time-slot-pricing/index.vue'),

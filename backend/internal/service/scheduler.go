@@ -16,6 +16,7 @@ type SchedulerService struct {
 	purchaseService  *PurchaseService
 	timeSlotService  *TimeSlotPricingService
 	reviewService    *ReviewService
+	smsService       *SmsService
 }
 
 func NewSchedulerService() *SchedulerService {
@@ -28,6 +29,7 @@ func NewSchedulerService() *SchedulerService {
 		purchaseService:  NewPurchaseService(),
 		timeSlotService:  NewTimeSlotPricingService(),
 		reviewService:    NewReviewService(),
+		smsService:       NewSmsService(),
 	}
 }
 
@@ -44,6 +46,8 @@ func (s *SchedulerService) StartAllSchedulers() {
 	go s.runReviewSyncScheduler()
 	go s.runReviewWorkOrderScheduler()
 	go s.runRatingAlertScheduler()
+	go s.runSmsTaskScheduler()
+	go s.runSmsConversionScheduler()
 	log.Println("[Scheduler] All schedulers started")
 }
 
@@ -480,4 +484,44 @@ func (s *SchedulerService) checkRatingAlerts() {
 	} else if count > 0 {
 		log.Printf("[Scheduler] Triggered %d rating alerts", count)
 	}
+}
+
+func (s *SchedulerService) runSmsTaskScheduler() {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	s.checkSmsTasks()
+
+	for range ticker.C {
+		s.checkSmsTasks()
+	}
+}
+
+func (s *SchedulerService) runSmsConversionScheduler() {
+	ticker := time.NewTicker(1 * time.Hour)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		s.checkSmsConversions()
+	}
+}
+
+func (s *SchedulerService) checkSmsTasks() {
+	tasks, err := s.smsService.smsRepo.GetPendingScheduleTasks(time.Now())
+	if err != nil {
+		log.Printf("[Scheduler] Failed to get pending sms tasks: %v", err)
+		return
+	}
+	for _, task := range tasks {
+		task := task
+		go func() {
+			if err := s.smsService.ExecuteTask(&task); err != nil {
+				log.Printf("[Scheduler] Failed to execute sms task %d: %v", task.ID, err)
+			}
+		}()
+	}
+}
+
+func (s *SchedulerService) checkSmsConversions() {
+	log.Println("[Scheduler] Checking sms conversions...")
 }

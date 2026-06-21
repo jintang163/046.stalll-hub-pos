@@ -98,6 +98,10 @@ func main() {
 		&model.ReviewWorkOrder{},
 		&model.RatingAlert{},
 		&model.StorePlatformAuth{},
+
+		&model.SmsTemplate{},
+		&model.SmsTask{},
+		&model.SmsRecord{},
 	)
 
 	initDefaultData()

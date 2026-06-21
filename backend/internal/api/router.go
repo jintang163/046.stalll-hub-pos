@@ -44,6 +44,7 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 	facePaymentHandler := handler.NewFacePaymentHandler()
 	timeSlotPricingHandler := handler.NewTimeSlotPricingHandler()
 	reviewHandler := handler.NewReviewHandler()
+	smsHandler := handler.NewSmsHandler()
 
 	orderHandler := handler.NewOrderHandler(nil)
 
@@ -599,6 +600,33 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 			review.GET("/alerts", reviewHandler.ListAlerts)
 			review.POST("/alerts/:id/handle", reviewHandler.HandleAlert)
 			review.POST("/alerts/check", reviewHandler.CheckAlerts)
+		}
+
+		sms := api.Group("/sms")
+		sms.Use(middleware.JWTAuth())
+		{
+			sms.POST("/templates", smsHandler.CreateTemplate)
+			sms.PUT("/templates/:id", smsHandler.UpdateTemplate)
+			sms.DELETE("/templates/:id", smsHandler.DeleteTemplate)
+			sms.GET("/templates/:id", smsHandler.GetTemplate)
+			sms.GET("/templates", smsHandler.ListTemplates)
+			sms.POST("/templates/:id/review", smsHandler.ReviewTemplate)
+			sms.GET("/templates/active/list", smsHandler.ListActiveTemplates)
+
+			sms.POST("/tasks", smsHandler.CreateTask)
+			sms.PUT("/tasks/:id", smsHandler.UpdateTask)
+			sms.DELETE("/tasks/:id", smsHandler.DeleteTask)
+			sms.GET("/tasks/:id", smsHandler.GetTask)
+			sms.GET("/tasks", smsHandler.ListTasks)
+			sms.POST("/tasks/:id/start", smsHandler.StartTask)
+			sms.POST("/tasks/:id/pause", smsHandler.PauseTask)
+			sms.GET("/tasks/:id/statistics", smsHandler.GetTaskStatistics)
+			sms.POST("/tasks/target-count", smsHandler.CalculateTargetCount)
+
+			sms.GET("/records", smsHandler.ListRecords)
+			sms.GET("/records/:id", smsHandler.GetRecord)
+
+			sms.POST("/test-send", smsHandler.SendTestSms)
 		}
 	}
 
