@@ -50,6 +50,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     saveProducts: (products) => ipcRenderer.invoke('db:saveProducts', products),
     saveCategories: (categories) => ipcRenderer.invoke('db:saveCategories', categories),
     updateStock: (skuId, stock) => ipcRenderer.invoke('db:updateStock', skuId, stock),
+    batchUpdateSoldOut: (skuIds, isSoldOut) => ipcRenderer.invoke('db:batchUpdateSoldOut', skuIds, isSoldOut),
     updateProductStatus: (productId, status) => ipcRenderer.invoke('db:updateProductStatus', productId, status),
     deleteProduct: (productId) => ipcRenderer.invoke('db:deleteProduct', productId),
     deleteCategory: (categoryId) => ipcRenderer.invoke('db:deleteCategory', categoryId),

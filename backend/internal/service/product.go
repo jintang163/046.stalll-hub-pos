@@ -490,6 +490,7 @@ func (s *ProductService) convertToDetailResponse(p *model.Product) *dto.ProductD
 			SoldCount:       sku.SoldCount,
 			Image:           sku.Image,
 			Status:          sku.Status,
+			IsSoldOut:       sku.IsSoldOut,
 			AttributeValues: attrValues,
 		})
 	}
@@ -537,4 +538,142 @@ func (s *ProductService) convertToDetailResponse(p *model.Product) *dto.ProductD
 		CreatedAt:             p.CreatedAt.Format("2006-01-02 15:04:05"),
 		UpdatedAt:             p.UpdatedAt.Format("2006-01-02 15:04:05"),
 	}
+}
+
+func (s *ProductService) BatchSoldOut(dtoReq *dto.SoldOutBatchDTO) error {
+	skus, err := s.productRepo.GetSKUsByIDs(dtoReq.SKUIds)
+	if err != nil {
+		return err
+	}
+	if len(skus) == 0 {
+		return nil
+	}
+
+	err = s.productRepo.BatchUpdateSoldOut(dtoReq.SKUIds, true)
+	if err != nil {
+		return err
+	}
+
+	storeID := dtoReq.StoreID
+	if storeID == 0 && len(skus) > 0 {
+		storeID = skus[0].StoreID
+	}
+
+	for _, sku := range skus {
+		if sku.IsSoldOut {
+			continue
+		}
+		record := &model.SoldOutRecord{
+			StoreID:       storeID,
+			ProductID:     sku.ProductID,
+			SKUID:         sku.ID,
+			SKUCode:       sku.SKUCode,
+			ProductName:   sku.Product.Name,
+			SpecName:      sku.SpecName,
+			CategoryID:    sku.Product.CategoryID,
+			ActionType:    "sold_out",
+			OperatorID:    dtoReq.OperatorID,
+			OperatorName:  dtoReq.OperatorName,
+			Source:        dtoReq.Source,
+			Remark:        dtoReq.Remark,
+			StockAtAction: sku.Stock,
+		}
+		s.productRepo.CreateSoldOutRecord(record)
+
+		product, _ := s.productRepo.GetByID(sku.ProductID)
+		if product != nil {
+			nsq.PublishProductChange("update", storeID, sku.ProductID, product)
+		}
+	}
+
+	return nil
+}
+
+func (s *ProductService) BatchRestoreSoldOut(dtoReq *dto.SoldOutBatchDTO) error {
+	skus, err := s.productRepo.GetSKUsByIDs(dtoReq.SKUIds)
+	if err != nil {
+		return err
+	}
+	if len(skus) == 0 {
+		return nil
+	}
+
+	err = s.productRepo.BatchUpdateSoldOut(dtoReq.SKUIds, false)
+	if err != nil {
+		return err
+	}
+
+	storeID := dtoReq.StoreID
+	if storeID == 0 && len(skus) > 0 {
+		storeID = skus[0].StoreID
+	}
+
+	for _, sku := range skus {
+		if !sku.IsSoldOut {
+			continue
+		}
+		record := &model.SoldOutRecord{
+			StoreID:       storeID,
+			ProductID:     sku.ProductID,
+			SKUID:         sku.ID,
+			SKUCode:       sku.SKUCode,
+			ProductName:   sku.Product.Name,
+			SpecName:      sku.SpecName,
+			CategoryID:    sku.Product.CategoryID,
+			ActionType:    "restore",
+			OperatorID:    dtoReq.OperatorID,
+			OperatorName:  dtoReq.OperatorName,
+			Source:        dtoReq.Source,
+			Remark:        dtoReq.Remark,
+			StockAtAction: sku.Stock,
+		}
+		s.productRepo.CreateSoldOutRecord(record)
+
+		product, _ := s.productRepo.GetByID(sku.ProductID)
+		if product != nil {
+			nsq.PublishProductChange("update", storeID, sku.ProductID, product)
+		}
+	}
+
+	return nil
+}
+
+func (s *ProductService) ListSoldOutRecords(query *dto.SoldOutRecordQueryDTO) ([]dto.SoldOutRecordResponse, int64, error) {
+	records, total, err := s.productRepo.ListSoldOutRecords(
+		query.StoreID,
+		query.ProductID,
+		query.SKUID,
+		query.ActionType,
+		query.StartDate,
+		query.EndDate,
+		query.GetOffset(),
+		query.GetLimit(),
+	)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var response []dto.SoldOutRecordResponse
+	for _, r := range records {
+		response = append(response, dto.SoldOutRecordResponse{
+			ID:            r.ID,
+			StoreID:       r.StoreID,
+			ProductID:     r.ProductID,
+			SKUID:         r.SKUID,
+			SKUCode:       r.SKUCode,
+			ProductName:   r.ProductName,
+			SpecName:      r.SpecName,
+			CategoryID:    r.CategoryID,
+			CategoryName:  r.CategoryName,
+			ActionType:    r.ActionType,
+			OperatorID:    r.OperatorID,
+			OperatorName:  r.OperatorName,
+			Source:        r.Source,
+			Remark:        r.Remark,
+			StockAtAction: r.StockAtAction,
+			CreatedAt:     r.CreatedAt.Format("2006-01-02 15:04:05"),
+		})
+	}
+
+	return response, total, nil
 }

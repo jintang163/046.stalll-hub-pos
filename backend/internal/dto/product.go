@@ -172,6 +172,7 @@ type ProductSKUResponse struct {
 	SoldCount       int                   `json:"sold_count"`
 	Image           string                `json:"image"`
 	Status          int                   `json:"status"`
+	IsSoldOut       bool                  `json:"is_sold_out"`
 	AttributeValues []SKUAttributeResponse `json:"attribute_values"`
 }
 
@@ -204,4 +205,42 @@ type SyncProductResponse struct {
 	LastSyncID uint                    `json:"last_sync_id"`
 	Total      int64                   `json:"total"`
 	Products   []ProductDetailResponse `json:"products"`
+}
+
+type SoldOutBatchDTO struct {
+	StoreID      uint   `json:"store_id"`
+	SKUIds       []uint `json:"sku_ids" binding:"required,min=1"`
+	OperatorID   uint   `json:"operator_id"`
+	OperatorName string `json:"operator_name"`
+	Source       string `json:"source"`
+	Remark       string `json:"remark"`
+}
+
+type SoldOutRecordQueryDTO struct {
+	StoreID    uint   `form:"store_id"`
+	ProductID  uint   `form:"product_id"`
+	SKUID      uint   `form:"sku_id"`
+	ActionType string `form:"action_type"`
+	StartDate  string `form:"start_date"`
+	EndDate    string `form:"end_date"`
+	Pagination
+}
+
+type SoldOutRecordResponse struct {
+	ID            uint   `json:"id"`
+	StoreID       uint   `json:"store_id"`
+	ProductID     uint   `json:"product_id"`
+	SKUID         uint   `json:"sku_id"`
+	SKUCode       string `json:"sku_code"`
+	ProductName   string `json:"product_name"`
+	SpecName      string `json:"spec_name"`
+	CategoryID    uint   `json:"category_id"`
+	CategoryName  string `json:"category_name"`
+	ActionType    string `json:"action_type"`
+	OperatorID    uint   `json:"operator_id"`
+	OperatorName  string `json:"operator_name"`
+	Source        string `json:"source"`
+	Remark        string `json:"remark"`
+	StockAtAction int    `json:"stock_at_action"`
+	CreatedAt     string `json:"created_at"`
 }

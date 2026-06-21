@@ -33,6 +33,13 @@
           <span class="label">摊位分成:</span>
           <span class="value amount stall">¥{{ formatMoney(dailySales.stallAmount) }}</span>
         </div>
+        <el-button 
+          :type="soldOutMode ? 'warning' : 'default'" 
+          @click="toggleSoldOutMode" 
+          :icon="Warning"
+        >
+          {{ soldOutMode ? '退出沽清' : '沽清管理' }}
+        </el-button>
         <el-button @click="refreshData" :icon="Refresh" :loading="loading">
           刷新
         </el-button>
@@ -68,24 +75,64 @@
       </aside>
 
       <main class="product-panel">
+        <div v-if="soldOutMode" class="sold-out-toolbar">
+          <div class="toolbar-left">
+            <el-checkbox 
+              v-model="selectAllSoldOut" 
+              :indeterminate="isIndeterminate"
+              @change="handleSelectAll"
+            >
+              全选
+            </el-checkbox>
+            <span class="selected-count">已选 {{ selectedSKUIds.length }} 项</span>
+          </div>
+          <div class="toolbar-right">
+            <el-button 
+              type="warning" 
+              :icon="Warning"
+              @click="handleBatchSoldOut" 
+              :disabled="selectedSKUIds.length === 0 || submittingSoldOut"
+              :loading="submittingSoldOut"
+            >
+              批量沽清
+            </el-button>
+            <el-button 
+              type="success" 
+              :icon="CircleCheck"
+              @click="handleBatchRestore" 
+              :disabled="selectedSKUIds.length === 0 || submittingSoldOut"
+              :loading="submittingSoldOut"
+            >
+              批量恢复
+            </el-button>
+          </div>
+        </div>
         <div class="product-list" v-loading="loading">
           <div
             v-for="product in filteredProducts"
             :key="product.id"
             class="product-card"
-            :class="{ disabled: !product.status || (product.stock != null && product.stock <= 0) }"
-            @click="openSKUSelector(product)"
+            :class="{ 
+              disabled: !product.status || (product.stock != null && product.stock <= 0) || isProductSoldOut(product),
+              'sold-out-mode': soldOutMode 
+            }"
+            @click="soldOutMode ? toggleProductSelect(product) : openSKUSelector(product)"
           >
+            <div v-if="soldOutMode" class="select-checkbox">
+              <el-checkbox :model-value="isProductSelected(product)" @click.stop />
+            </div>
             <div class="product-image">
               <el-image
                 :src="product.image || defaultImg"
                 fit="cover"
                 :preview-src-list="product.image ? [product.image] : []"
+                @click.stop
               />
               <div v-if="product.is_hot" class="tag hot">热销</div>
               <div v-if="product.is_recommend" class="tag recommend">推荐</div>
               <div v-if="!product.status" class="tag offline">已下架</div>
               <div v-if="product.stock != null && product.stock <= 0" class="tag soldout">售罄</div>
+              <div v-if="isProductSoldOut(product)" class="tag guqing">沽清</div>
             </div>
             <div class="product-info">
               <div class="product-name">{{ product.name }}</div>
@@ -237,12 +284,13 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Refresh, List, Setting, Switch, Connection, Cpu, Shop,
-  Money, Wallet, CreditCard, Postcard
+  Money, Wallet, CreditCard, Postcard, Warning, CircleCheck
 } from '@element-plus/icons-vue'
 import { useStallStore } from '@/store/stall'
 import SKUSelector from '@/components/SKUSelector.vue'
 import { submitOrder } from '@/api/order'
 import { getStallDailyReport, getStallDevices } from '@/api/stall'
+import { batchSoldOut, batchRestoreSoldOut } from '@/api/product'
 
 const router = useRouter()
 const stallStore = useStallStore()
@@ -264,6 +312,11 @@ const payDialogVisible = ref(false)
 const selectedPayMethod = ref('cash')
 const receivedAmount = ref(0)
 const discountAmount = ref(0)
+
+const soldOutMode = ref(false)
+const selectedSKUIds = ref([])
+const submittingSoldOut = ref(false)
+const selectAllSoldOut = ref(false)
 
 const payMethods = reactive([
   { value: 'cash', label: '现金', icon: Money },
@@ -344,6 +397,199 @@ function getTotalStock(product) {
   return '--'
 }
 
+function isProductSoldOut(product) {
+  if (product.skus && product.skus.length > 0) {
+    return product.skus.some(s => s.is_sold_out)
+  }
+  return product.is_sold_out || false
+}
+
+function getProductSKUIds(product) {
+  if (product.skus && product.skus.length > 0) {
+    return product.skus.map(s => s.id)
+  }
+  return [product.id]
+}
+
+function isProductSelected(product) {
+  const skuIds = getProductSKUIds(product)
+  return skuIds.every(id => selectedSKUIds.value.includes(id))
+}
+
+const isIndeterminate = computed(() => {
+  if (filteredProducts.value.length === 0) return false
+  let selectedCount = 0
+  let totalCount = 0
+  filteredProducts.value.forEach(p => {
+    const skuIds = getProductSKUIds(p)
+    totalCount += skuIds.length
+    skuIds.forEach(id => {
+      if (selectedSKUIds.value.includes(id)) selectedCount++
+    })
+  })
+  return selectedCount > 0 && selectedCount < totalCount
+})
+
+function toggleSoldOutMode() {
+  soldOutMode.value = !soldOutMode.value
+  selectedSKUIds.value = []
+  selectAllSoldOut.value = false
+}
+
+function toggleProductSelect(product) {
+  const skuIds = getProductSKUIds(product)
+  const allSelected = skuIds.every(id => selectedSKUIds.value.includes(id))
+  
+  if (allSelected) {
+    selectedSKUIds.value = selectedSKUIds.value.filter(id => !skuIds.includes(id))
+  } else {
+    skuIds.forEach(id => {
+      if (!selectedSKUIds.value.includes(id)) {
+        selectedSKUIds.value.push(id)
+      }
+    })
+  }
+  
+  updateSelectAllStatus()
+}
+
+function handleSelectAll(val) {
+  if (val) {
+    const allIds = []
+    filteredProducts.value.forEach(p => {
+      getProductSKUIds(p).forEach(id => allIds.push(id))
+    })
+    selectedSKUIds.value = allIds
+  } else {
+    selectedSKUIds.value = []
+  }
+  selectAllSoldOut.value = val
+}
+
+function updateSelectAllStatus() {
+  if (filteredProducts.value.length === 0) {
+    selectAllSoldOut.value = false
+    return
+  }
+  let allSelected = true
+  let hasSelected = false
+  filteredProducts.value.forEach(p => {
+    const skuIds = getProductSKUIds(p)
+    skuIds.forEach(id => {
+      if (selectedSKUIds.value.includes(id)) {
+        hasSelected = true
+      } else {
+        allSelected = false
+      }
+    })
+  })
+  selectAllSoldOut.value = allSelected && hasSelected
+}
+
+async function handleBatchSoldOut() {
+  if (selectedSKUIds.value.length === 0) {
+    ElMessage.warning('请先选择要沽清的商品')
+    return
+  }
+  
+  try {
+    await ElMessageBox.confirm(
+      `确定要将选中的 ${selectedSKUIds.value.length} 个 SKU 标记为沽清吗？`,
+      '确认沽清',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    )
+  } catch {
+    return
+  }
+  
+  submittingSoldOut.value = true
+  try {
+    if (isOnline.value) {
+      await batchSoldOut({
+        sku_ids: selectedSKUIds.value,
+        source: 'stall_pos',
+      })
+    }
+    
+    if (window.electronAPI) {
+      await window.electronAPI.invoke('db:batchUpdateSoldOut', selectedSKUIds.value, true)
+    }
+    
+    await updateProductsSoldOutStatus(selectedSKUIds.value, true)
+    
+    ElMessage.success(`成功沽清 ${selectedSKUIds.value.length} 个商品`)
+    selectedSKUIds.value = []
+    updateSelectAllStatus()
+  } catch (error) {
+    console.error('批量沽清失败:', error)
+    ElMessage.error('批量沽清失败: ' + (error.message || '未知错误'))
+  } finally {
+    submittingSoldOut.value = false
+  }
+}
+
+async function handleBatchRestore() {
+  if (selectedSKUIds.value.length === 0) {
+    ElMessage.warning('请先选择要恢复的商品')
+    return
+  }
+  
+  try {
+    await ElMessageBox.confirm(
+      `确定要恢复选中的 ${selectedSKUIds.value.length} 个 SKU 的可售状态吗？`,
+      '确认恢复',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'success',
+      }
+    )
+  } catch {
+    return
+  }
+  
+  submittingSoldOut.value = true
+  try {
+    if (isOnline.value) {
+      await batchRestoreSoldOut({
+        sku_ids: selectedSKUIds.value,
+        source: 'stall_pos',
+      })
+    }
+    
+    if (window.electronAPI) {
+      await window.electronAPI.invoke('db:batchUpdateSoldOut', selectedSKUIds.value, false)
+    }
+    
+    await updateProductsSoldOutStatus(selectedSKUIds.value, false)
+    
+    ElMessage.success(`成功恢复 ${selectedSKUIds.value.length} 个商品`)
+    selectedSKUIds.value = []
+    updateSelectAllStatus()
+  } catch (error) {
+    console.error('批量恢复失败:', error)
+    ElMessage.error('批量恢复失败: ' + (error.message || '未知错误'))
+  } finally {
+    submittingSoldOut.value = false
+  }
+}
+
+function updateProductsSoldOutStatus(skuIds, isSoldOut) {
+  stallProducts.value.forEach(product => {
+    if (product.skus && product.skus.length > 0) {
+      product.skus.forEach(sku => {
+        if (skuIds.includes(sku.id)) {
+          sku.is_sold_out = isSoldOut
+        }
+      })
+    }
+  })
+}
+
 function openSKUSelector(product) {
   if (!product.status) {
     ElMessage.warning('该商品已下架')
@@ -351,6 +597,10 @@ function openSKUSelector(product) {
   }
   if (product.stock != null && product.stock <= 0) {
     ElMessage.warning('该商品已售罄')
+    return
+  }
+  if (isProductSoldOut(product)) {
+    ElMessage.warning('该商品已沽清')
     return
   }
   selectedProduct.value = product
@@ -808,6 +1058,33 @@ onBeforeUnmount(() => {
   overflow-y: auto;
   padding: 20px;
 
+  .sold-out-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: #fff7e6;
+    border: 1px solid #ffd591;
+    border-radius: 8px;
+    margin-bottom: 16px;
+
+    .toolbar-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+
+      .selected-count {
+        font-size: 13px;
+        color: #d46b08;
+      }
+    }
+
+    .toolbar-right {
+      display: flex;
+      gap: 10px;
+    }
+  }
+
   .product-list {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
@@ -830,6 +1107,26 @@ onBeforeUnmount(() => {
     &.disabled {
       opacity: 0.6;
       cursor: not-allowed;
+    }
+
+    &.sold-out-mode {
+      border: 2px solid transparent;
+      transition: all 0.2s;
+
+      &:hover {
+        border-color: #e6a23c;
+        transform: none;
+      }
+    }
+
+    .select-checkbox {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 10;
+      background: rgba(255,255,255,0.9);
+      border-radius: 4px;
+      padding: 2px;
     }
 
     .product-image {
@@ -857,6 +1154,7 @@ onBeforeUnmount(() => {
         &.recommend { background: #e6a23c; }
         &.offline { background: #909399; }
         &.soldout { background: #606266; top: auto; bottom: 8px; left: 8px; right: 8px; text-align: center; }
+        &.guqing { background: #e6a23c; top: 8px; left: auto; right: 8px; }
       }
     }
 

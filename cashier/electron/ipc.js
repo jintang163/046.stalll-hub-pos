@@ -205,6 +205,15 @@ class IPC {
       }
     })
 
+    ipcMain.handle('db:batchUpdateSoldOut', (_, skuIds, isSoldOut) => {
+      try {
+        return db.batchUpdateSoldOut(skuIds, isSoldOut)
+      } catch (error) {
+        console.error('[IPC] db:batchUpdateSoldOut error:', error)
+        return { success: false, error: error.message }
+      }
+    })
+
     ipcMain.handle('db:updateProductStatus', (_, productId, status) => {
       try {
         return db.updateProductStatus(productId, status)

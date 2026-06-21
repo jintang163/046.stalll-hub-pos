@@ -65,6 +65,7 @@ class SQLiteDatabase {
         stock INTEGER DEFAULT 0,
         image TEXT,
         status INTEGER DEFAULT 1,
+        is_sold_out INTEGER DEFAULT 0,
         created_at TEXT,
         updated_at TEXT,
         FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
@@ -422,7 +423,7 @@ class SQLiteDatabase {
       is_hot: Boolean(product.is_hot),
       is_recommend: Boolean(product.is_recommend),
       status: Boolean(product.status),
-      skus: skus.map(s => ({ ...s, status: Boolean(s.status) })),
+      skus: skus.map(s => ({ ...s, status: Boolean(s.status), is_sold_out: Boolean(s.is_sold_out) })),
       attributes: attributes.map(a => ({
         ...a,
         status: Boolean(a.status),
@@ -473,8 +474,8 @@ class SQLiteDatabase {
 
       const insertSKU = this.db.prepare(`
         INSERT OR REPLACE INTO skus 
-        (id, product_id, sku_code, spec_name, price, original_price, stock, image, status, created_at, updated_at)
-        VALUES (@id, @product_id, @sku_code, @spec_name, @price, @original_price, @stock, @image, @status, @created_at, @updated_at)
+        (id, product_id, sku_code, spec_name, price, original_price, stock, image, status, is_sold_out, created_at, updated_at)
+        VALUES (@id, @product_id, @sku_code, @spec_name, @price, @original_price, @stock, @image, @status, @is_sold_out, @created_at, @updated_at)
       `)
 
       const deleteSKUs = this.db.prepare('DELETE FROM skus WHERE product_id = ?')
@@ -528,6 +529,7 @@ class SQLiteDatabase {
               stock: sku.stock,
               image: sku.image || '',
               status: sku.status ? 1 : 0,
+              is_sold_out: sku.is_sold_out ? 1 : 0,
               created_at: sku.created_at || p.created_at,
               updated_at: sku.updated_at || p.updated_at
             })
@@ -599,6 +601,16 @@ class SQLiteDatabase {
   updateStock(skuId, stock) {
     const result = this.db.prepare('UPDATE skus SET stock = ? WHERE id = ?').run(stock, skuId)
     return { success: result.changes > 0 }
+  }
+
+  batchUpdateSoldOut(skuIds, isSoldOut) {
+    if (!skuIds || skuIds.length === 0) {
+      return { success: true, count: 0 }
+    }
+    const placeholders = skuIds.map(() => '?').join(', ')
+    const sql = `UPDATE skus SET is_sold_out = ? WHERE id IN (${placeholders})`
+    const result = this.db.prepare(sql).run(isSoldOut ? 1 : 0, ...skuIds)
+    return { success: true, count: result.changes }
   }
 
   updateProductStatus(productId, status) {
@@ -906,6 +918,7 @@ class SQLiteDatabase {
         `ALTER TABLE order_items ADD COLUMN stall_id INTEGER`,
         `ALTER TABLE order_items ADD COLUMN stall_amount REAL DEFAULT 0`,
         `ALTER TABLE order_items ADD COLUMN platform_amount REAL DEFAULT 0`,
+        `ALTER TABLE skus ADD COLUMN is_sold_out INTEGER DEFAULT 0`,
       ]
       alterStmts.forEach(sql => {
         try { this.db.exec(sql) } catch (_) {}

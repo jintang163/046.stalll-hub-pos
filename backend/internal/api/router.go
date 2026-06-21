@@ -67,6 +67,9 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 			products.PUT("/stock", productHandler.UpdateStock)
 			products.GET("/sync", productHandler.Sync)
 			products.GET("/stock-warnings", productHandler.GetStockWarnings)
+			products.POST("/sold-out", productHandler.BatchSoldOut)
+			products.POST("/sold-out/restore", productHandler.BatchRestoreSoldOut)
+			products.GET("/sold-out/records", productHandler.ListSoldOutRecords)
 		}
 		api.GET("/products/categories", productHandler.ListCategories)
 

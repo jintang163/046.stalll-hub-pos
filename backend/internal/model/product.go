@@ -47,6 +47,7 @@ type ProductSKU struct {
 	SoldCount    int             `gorm:"default:0" json:"sold_count"`
 	Image        string          `gorm:"size:255" json:"image"`
 	Status       int             `gorm:"default:1" json:"status"`
+	IsSoldOut    bool            `gorm:"default:false;index" json:"is_sold_out"`
 	Product      Product         `gorm:"foreignKey:ProductID" json:"product,omitempty"`
 	AttributeValues []SKUAttributeValue `gorm:"foreignKey:SKUID" json:"attribute_values,omitempty"`
 }
@@ -133,4 +134,25 @@ type StockCheckItem struct {
 	Status       int            `gorm:"default:0" json:"status"`
 	Remark       string         `gorm:"size:200" json:"remark"`
 	Check        StockCheck     `gorm:"foreignKey:CheckID" json:"check,omitempty"`
+}
+
+type SoldOutRecord struct {
+	BaseModel
+	StoreID      uint      `gorm:"not null;index" json:"store_id"`
+	ProductID    uint      `gorm:"not null;index" json:"product_id"`
+	SKUID        uint      `gorm:"not null;index" json:"sku_id"`
+	SKUCode      string    `gorm:"size:50" json:"sku_code"`
+	ProductName  string    `gorm:"size:100" json:"product_name"`
+	SpecName     string    `gorm:"size:50" json:"spec_name"`
+	CategoryID   uint      `json:"category_id"`
+	CategoryName string    `gorm:"size:50" json:"category_name"`
+	ActionType   string    `gorm:"size:20;index" json:"action_type"`
+	OperatorID   uint      `json:"operator_id"`
+	OperatorName string    `gorm:"size:50" json:"operator_name"`
+	Source       string    `gorm:"size:20" json:"source"`
+	Remark       string    `gorm:"size:500" json:"remark"`
+	StockAtAction int      `json:"stock_at_action"`
+	Store        Store     `gorm:"foreignKey:StoreID" json:"store,omitempty"`
+	Product      Product   `gorm:"foreignKey:ProductID" json:"product,omitempty"`
+	SKU          ProductSKU `gorm:"foreignKey:SKUID" json:"sku,omitempty"`
 }

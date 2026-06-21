@@ -243,3 +243,68 @@ func (h *ProductHandler) ListCategories(c *gin.Context) {
 
 	middleware.Success(c, categories)
 }
+
+func (h *ProductHandler) BatchSoldOut(c *gin.Context) {
+	var req dto.SoldOutBatchDTO
+	if err := c.ShouldBindJSON(&req); err != nil {
+		middleware.Error(c, "参数错误: "+err.Error())
+		return
+	}
+
+	if req.StoreID == 0 {
+		req.StoreID = middleware.GetStoreID(c)
+	}
+
+	err := h.productService.BatchSoldOut(&req)
+	if err != nil {
+		middleware.Error(c, "批量沽清失败: "+err.Error())
+		return
+	}
+
+	middleware.Success(c, nil)
+}
+
+func (h *ProductHandler) BatchRestoreSoldOut(c *gin.Context) {
+	var req dto.SoldOutBatchDTO
+	if err := c.ShouldBindJSON(&req); err != nil {
+		middleware.Error(c, "参数错误: "+err.Error())
+		return
+	}
+
+	if req.StoreID == 0 {
+		req.StoreID = middleware.GetStoreID(c)
+	}
+
+	err := h.productService.BatchRestoreSoldOut(&req)
+	if err != nil {
+		middleware.Error(c, "批量恢复失败: "+err.Error())
+		return
+	}
+
+	middleware.Success(c, nil)
+}
+
+func (h *ProductHandler) ListSoldOutRecords(c *gin.Context) {
+	var query dto.SoldOutRecordQueryDTO
+	if err := c.ShouldBindQuery(&query); err != nil {
+		middleware.Error(c, "参数错误: "+err.Error())
+		return
+	}
+
+	if query.StoreID == 0 {
+		query.StoreID = middleware.GetStoreID(c)
+	}
+
+	records, total, err := h.productService.ListSoldOutRecords(&query)
+	if err != nil {
+		middleware.Error(c, "获取沽清记录失败: "+err.Error())
+		return
+	}
+
+	middleware.Success(c, gin.H{
+		"list":  records,
+		"total": total,
+		"page":  query.Page,
+		"size":  query.PageSize,
+	})
+}

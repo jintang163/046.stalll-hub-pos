@@ -259,3 +259,52 @@ func (r *ProductRepository) GetByIDs(ids []uint) ([]model.Product, error) {
 		Find(&products).Error
 	return products, err
 }
+
+func (r *ProductRepository) CreateSoldOutRecord(record *model.SoldOutRecord) error {
+	return r.db.Create(record).Error
+}
+
+func (r *ProductRepository) BatchUpdateSoldOut(skuIDs []uint, isSoldOut bool) error {
+	return r.db.Model(&model.ProductSKU{}).
+		Where("id IN ?", skuIDs).
+		Update("is_sold_out", isSoldOut).Error
+}
+
+func (r *ProductRepository) GetSKUsByIDs(skuIDs []uint) ([]model.ProductSKU, error) {
+	var skus []model.ProductSKU
+	err := r.db.Where("id IN ?", skuIDs).Preload("Product").Find(&skus).Error
+	return skus, err
+}
+
+func (r *ProductRepository) ListSoldOutRecords(storeID, productID, skuID uint, actionType, startDate, endDate string, offset, limit int) ([]model.SoldOutRecord, int64, error) {
+	var records []model.SoldOutRecord
+	var total int64
+
+	query := r.db.Model(&model.SoldOutRecord{}).Where("store_id = ?", storeID)
+
+	if productID > 0 {
+		query = query.Where("product_id = ?", productID)
+	}
+	if skuID > 0 {
+		query = query.Where("sku_id = ?", skuID)
+	}
+	if actionType != "" {
+		query = query.Where("action_type = ?", actionType)
+	}
+	if startDate != "" {
+		query = query.Where("created_at >= ?", startDate)
+	}
+	if endDate != "" {
+		query = query.Where("created_at <= ?", endDate+" 23:59:59")
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	err := query.Preload("Product").Preload("SKU").
+		Order("id DESC").
+		Offset(offset).Limit(limit).Find(&records).Error
+
+	return records, total, err
+}
