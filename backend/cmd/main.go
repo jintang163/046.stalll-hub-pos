@@ -88,6 +88,16 @@ func main() {
 		&model.PurchaseOrder{},
 		&model.PurchaseOrderItem{},
 		&model.SalesForecast{},
+
+		&model.TimeSlotPricing{},
+		&model.StockReservation{},
+		&model.ReservationReminder{},
+
+		&model.PlatformReviewRating{},
+		&model.PlatformReview{},
+		&model.ReviewWorkOrder{},
+		&model.RatingAlert{},
+		&model.StorePlatformAuth{},
 	)
 
 	initDefaultData()

@@ -36,6 +36,14 @@ func NewReviewService() *ReviewService {
 }
 
 func (s *ReviewService) SaveAuth(req *dto.PlatformAuthDTO) error {
+	existing, _ := s.reviewRepo.GetAuth(req.StoreID, req.Platform)
+	status := 1
+	if existing != nil {
+		status = existing.Status
+	}
+	if req.AuthToken == "" && req.RefreshToken == "" && req.StoreUrl == "" && req.ShopID == "" {
+		status = 0
+	}
 	auth := &model.StorePlatformAuth{
 		StoreID:      req.StoreID,
 		Platform:     req.Platform,
@@ -43,7 +51,7 @@ func (s *ReviewService) SaveAuth(req *dto.PlatformAuthDTO) error {
 		ShopID:       req.ShopID,
 		AuthToken:    req.AuthToken,
 		RefreshToken: req.RefreshToken,
-		Status:       1,
+		Status:       status,
 		SyncStatus:   "pending",
 	}
 	return s.reviewRepo.UpsertAuth(auth)
@@ -91,10 +99,13 @@ func (s *ReviewService) convertToAuthResponse(auth *model.StorePlatformAuth) *dt
 func (s *ReviewService) SyncStoreReviews(storeID uint, platform string) (*dto.SyncStatusResponse, error) {
 	auth, err := s.reviewRepo.GetAuth(storeID, platform)
 	if err != nil {
-		return nil, fmt.Errorf("auth not found: %w", err)
+		return nil, fmt.Errorf("门店%d未配置%s平台授权，请先在管理台配置授权信息", storeID, platform)
 	}
 	if auth.Status != 1 {
-		return nil, errors.New("auth is disabled")
+		return nil, fmt.Errorf("门店%d的%s平台授权已禁用，请先启用授权", storeID, platform)
+	}
+	if auth.AuthToken == "" && auth.StoreUrl == "" {
+		return nil, fmt.Errorf("门店%d的%s平台授权信息不完整，请补充店铺URL或授权Token", storeID, platform)
 	}
 
 	now := time.Now()
@@ -589,7 +600,7 @@ func (s *ReviewService) GetWorkOrder(id uint) (*dto.WorkOrderResponse, error) {
 	return s.convertToWorkOrderResponse(order), nil
 }
 
-func (s *ReviewService) HandleWorkOrder(id uint, req *dto.WorkOrderHandleRequest) error {
+func (s *ReviewService) HandleWorkOrder(id uint, handlerID uint, req *dto.WorkOrderHandleRequest) error {
 	_, err := s.reviewRepo.GetWorkOrderByID(id)
 	if err != nil {
 		return errors.New("work order not found")
@@ -599,6 +610,7 @@ func (s *ReviewService) HandleWorkOrder(id uint, req *dto.WorkOrderHandleRequest
 	updates := map[string]interface{}{
 		"status":        req.Status,
 		"handle_result": req.HandleResult,
+		"handler_id":    handlerID,
 		"handler_name":  req.HandlerName,
 		"handle_time":   &now,
 	}
@@ -765,7 +777,7 @@ func (s *ReviewService) ListAlerts(query *dto.AlertQueryDTO) (*dto.PageResponse,
 	}, nil
 }
 
-func (s *ReviewService) HandleAlert(id uint, req *dto.AlertHandleRequest) error {
+func (s *ReviewService) HandleAlert(id uint, handlerID uint, req *dto.AlertHandleRequest) error {
 	_, err := s.reviewRepo.GetAlertByID(id)
 	if err != nil {
 		return errors.New("alert not found")
@@ -775,6 +787,7 @@ func (s *ReviewService) HandleAlert(id uint, req *dto.AlertHandleRequest) error 
 	updates := map[string]interface{}{
 		"status":        req.Status,
 		"handle_remark": req.HandleRemark,
+		"handler_id":    handlerID,
 		"handler_name":  req.HandlerName,
 		"handle_time":   &now,
 	}

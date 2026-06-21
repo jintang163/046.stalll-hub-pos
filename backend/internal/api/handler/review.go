@@ -27,13 +27,13 @@ func (h *ReviewHandler) SaveAuth(c *gin.Context) {
 		return
 	}
 
-	auth, err := h.reviewService.SaveAuth(&req)
+	err := h.reviewService.SaveAuth(&req)
 	if err != nil {
 		middleware.Error(c, "保存平台授权失败: "+err.Error())
 		return
 	}
 
-	middleware.Success(c, auth)
+	middleware.Success(c, gin.H{"message": "授权保存成功"})
 }
 
 func (h *ReviewHandler) GetAuth(c *gin.Context) {
@@ -90,8 +90,8 @@ func (h *ReviewHandler) SyncReviews(c *gin.Context) {
 	}
 
 	go func() {
-		if err := h.reviewService.SyncReviews(req.StoreID, req.Platform); err != nil {
-			fmt.Printf("Sync reviews error: %v\n", err)
+		if _, err := h.reviewService.SyncStoreReviews(req.StoreID, req.Platform); err != nil {
+			fmt.Printf("[Review] Sync store %d platform %s error: %v\n", req.StoreID, req.Platform, err)
 		}
 	}()
 
@@ -100,8 +100,8 @@ func (h *ReviewHandler) SyncReviews(c *gin.Context) {
 
 func (h *ReviewHandler) SyncAll(c *gin.Context) {
 	go func() {
-		if err := h.reviewService.SyncAll(); err != nil {
-			fmt.Printf("Sync all reviews error: %v\n", err)
+		if _, err := h.reviewService.SyncAllStores(); err != nil {
+			fmt.Printf("[Review] Sync all stores error: %v\n", err)
 		}
 	}()
 
@@ -126,34 +126,27 @@ func (h *ReviewHandler) ListRatings(c *gin.Context) {
 		query.StoreID = middleware.GetStoreID(c)
 	}
 
-	ratings, total, err := h.reviewService.ListRatings(&query)
+	result, err := h.reviewService.ListRatings(&query)
 	if err != nil {
 		middleware.Error(c, "获取评分列表失败: "+err.Error())
 		return
 	}
 
-	middleware.PageSuccess(c, ratings, total, query.Page, query.PageSize)
+	middleware.PageSuccess(c, result.List, result.Total, result.Page, result.Size)
 }
 
 func (h *ReviewHandler) GetRatingTrend(c *gin.Context) {
-	storeIDStr := c.Query("store_id")
-	storeID := uint(0)
-	if storeIDStr != "" {
-		id, err := strconv.ParseUint(storeIDStr, 10, 32)
-		if err == nil {
-			storeID = uint(id)
-		}
+	var query dto.ReviewRatingQueryDTO
+	if err := c.ShouldBindQuery(&query); err != nil {
+		middleware.Error(c, "参数错误: "+err.Error())
+		return
 	}
 
-	if storeID == 0 {
-		storeID = middleware.GetStoreID(c)
+	if query.StoreID == 0 {
+		query.StoreID = middleware.GetStoreID(c)
 	}
 
-	platform := c.Query("platform")
-	startDate := c.Query("start_date")
-	endDate := c.Query("end_date")
-
-	trends, err := h.reviewService.GetRatingTrend(storeID, platform, startDate, endDate)
+	trends, err := h.reviewService.GetRatingTrend(&query)
 	if err != nil {
 		middleware.Error(c, "获取评分趋势失败: "+err.Error())
 		return
@@ -180,13 +173,13 @@ func (h *ReviewHandler) ListReviews(c *gin.Context) {
 		query.StoreID = middleware.GetStoreID(c)
 	}
 
-	reviews, total, err := h.reviewService.ListReviews(&query)
+	result, err := h.reviewService.ListReviews(&query)
 	if err != nil {
 		middleware.Error(c, "获取评价列表失败: "+err.Error())
 		return
 	}
 
-	middleware.PageSuccess(c, reviews, total, query.Page, query.PageSize)
+	middleware.PageSuccess(c, result.List, result.Total, result.Page, result.Size)
 }
 
 func (h *ReviewHandler) GetReview(c *gin.Context) {
@@ -220,13 +213,13 @@ func (h *ReviewHandler) ReplyReview(c *gin.Context) {
 		return
 	}
 
-	review, err := h.reviewService.ReplyReview(uint(id), req.ReplyContent)
+	err = h.reviewService.ReplyReview(uint(id), &req)
 	if err != nil {
 		middleware.Error(c, "回复评价失败: "+err.Error())
 		return
 	}
 
-	middleware.Success(c, review)
+	middleware.Success(c, gin.H{"message": "回复成功"})
 }
 
 func (h *ReviewHandler) CreateWorkOrder(c *gin.Context) {
@@ -263,13 +256,13 @@ func (h *ReviewHandler) ListWorkOrders(c *gin.Context) {
 		query.StoreID = middleware.GetStoreID(c)
 	}
 
-	workOrders, total, err := h.reviewService.ListWorkOrders(&query)
+	result, err := h.reviewService.ListWorkOrders(&query)
 	if err != nil {
 		middleware.Error(c, "获取工单列表失败: "+err.Error())
 		return
 	}
 
-	middleware.PageSuccess(c, workOrders, total, query.Page, query.PageSize)
+	middleware.PageSuccess(c, result.List, result.Total, result.Page, result.Size)
 }
 
 func (h *ReviewHandler) GetWorkOrder(c *gin.Context) {
@@ -305,13 +298,13 @@ func (h *ReviewHandler) HandleWorkOrder(c *gin.Context) {
 
 	handlerID := middleware.GetUserID(c)
 
-	workOrder, err := h.reviewService.HandleWorkOrder(uint(id), handlerID, &req)
+	err = h.reviewService.HandleWorkOrder(uint(id), handlerID, &req)
 	if err != nil {
 		middleware.Error(c, "处理工单失败: "+err.Error())
 		return
 	}
 
-	middleware.Success(c, workOrder)
+	middleware.Success(c, gin.H{"message": "工单处理成功"})
 }
 
 func (h *ReviewHandler) ListAlerts(c *gin.Context) {
@@ -332,13 +325,13 @@ func (h *ReviewHandler) ListAlerts(c *gin.Context) {
 		query.StoreID = middleware.GetStoreID(c)
 	}
 
-	alerts, total, err := h.reviewService.ListAlerts(&query)
+	result, err := h.reviewService.ListAlerts(&query)
 	if err != nil {
 		middleware.Error(c, "获取告警列表失败: "+err.Error())
 		return
 	}
 
-	middleware.PageSuccess(c, alerts, total, query.Page, query.PageSize)
+	middleware.PageSuccess(c, result.List, result.Total, result.Page, result.Size)
 }
 
 func (h *ReviewHandler) HandleAlert(c *gin.Context) {
@@ -357,19 +350,19 @@ func (h *ReviewHandler) HandleAlert(c *gin.Context) {
 
 	handlerID := middleware.GetUserID(c)
 
-	alert, err := h.reviewService.HandleAlert(uint(id), handlerID, &req)
+	err = h.reviewService.HandleAlert(uint(id), handlerID, &req)
 	if err != nil {
 		middleware.Error(c, "处理告警失败: "+err.Error())
 		return
 	}
 
-	middleware.Success(c, alert)
+	middleware.Success(c, gin.H{"message": "告警处理成功"})
 }
 
 func (h *ReviewHandler) CheckAlerts(c *gin.Context) {
 	go func() {
-		if err := h.reviewService.CheckAlerts(); err != nil {
-			fmt.Printf("Check alerts error: %v\n", err)
+		if _, err := h.reviewService.CheckRatingAlerts(); err != nil {
+			fmt.Printf("[Review] Check alerts error: %v\n", err)
 		}
 	}()
 

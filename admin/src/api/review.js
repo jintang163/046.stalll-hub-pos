@@ -1,78 +1,47 @@
 import request from '@/utils/request'
 
-export function getReviewList(params) {
+export function savePlatformAuth(data) {
   return request({
-    url: '/reviews',
+    url: '/review/auth',
+    method: 'post',
+    data
+  })
+}
+
+export function getPlatformAuth(storeId, platform) {
+  return request({
+    url: '/review/auth',
     method: 'get',
-    params
+    params: { store_id: storeId, platform }
   })
 }
 
-export function getReviewDetail(id) {
+export function listPlatformAuths(storeId) {
   return request({
-    url: `/reviews/${id}`,
-    method: 'get'
-  })
-}
-
-export function replyReview(id, data) {
-  return request({
-    url: `/reviews/${id}/reply`,
-    method: 'post',
-    data
-  })
-}
-
-export function createWorkOrder(data) {
-  return request({
-    url: '/work-orders',
-    method: 'post',
-    data
-  })
-}
-
-export function getWorkOrderList(params) {
-  return request({
-    url: '/work-orders',
+    url: '/review/auths',
     method: 'get',
-    params
+    params: { store_id: storeId }
   })
 }
 
-export function getWorkOrderDetail(id) {
+export function syncReviews(data) {
   return request({
-    url: `/work-orders/${id}`,
-    method: 'get'
-  })
-}
-
-export function handleWorkOrder(id, data) {
-  return request({
-    url: `/work-orders/${id}/handle`,
+    url: '/review/sync',
     method: 'post',
     data
   })
 }
 
-export function getAlertList(params) {
+export function syncAllReviews() {
   return request({
-    url: '/review-alerts',
-    method: 'get',
-    params
-  })
-}
-
-export function handleAlert(id, data) {
-  return request({
-    url: `/review-alerts/${id}/handle`,
-    method: 'post',
-    data
+    url: '/review/sync-all',
+    method: 'post'
   })
 }
 
 export function getRatingList(params) {
   return request({
-    url: '/review-ratings',
+    url: '/review/ratings',
     method: 'get',
     params
   })
@@ -80,24 +49,85 @@ export function getRatingList(params) {
 
 export function getRatingTrend(params) {
   return request({
-    url: '/review-ratings/trend',
+    url: '/review/ratings/trend',
     method: 'get',
     params
   })
 }
 
-export function syncAllReviews(params) {
+export function getReviewList(params) {
   return request({
-    url: '/reviews/sync',
-    method: 'post',
+    url: '/review/reviews',
+    method: 'get',
     params
   })
 }
 
-export function checkAlerts(params) {
+export function getReviewDetail(id) {
   return request({
-    url: '/review-alerts/check',
+    url: `/review/reviews/${id}`,
+    method: 'get'
+  })
+}
+
+export function replyReview(id, data) {
+  return request({
+    url: `/review/reviews/${id}/reply`,
     method: 'post',
+    data
+  })
+}
+
+export function createWorkOrder(data) {
+  return request({
+    url: '/review/work-orders',
+    method: 'post',
+    data
+  })
+}
+
+export function getWorkOrderList(params) {
+  return request({
+    url: '/review/work-orders',
+    method: 'get',
     params
+  })
+}
+
+export function getWorkOrderDetail(id) {
+  return request({
+    url: `/review/work-orders/${id}`,
+    method: 'get'
+  })
+}
+
+export function handleWorkOrder(id, data) {
+  return request({
+    url: `/review/work-orders/${id}/handle`,
+    method: 'post',
+    data
+  })
+}
+
+export function getAlertList(params) {
+  return request({
+    url: '/review/alerts',
+    method: 'get',
+    params
+  })
+}
+
+export function handleAlert(id, data) {
+  return request({
+    url: `/review/alerts/${id}/handle`,
+    method: 'post',
+    data
+  })
+}
+
+export function checkAlerts() {
+  return request({
+    url: '/review/alerts/check',
+    method: 'post'
   })
 }

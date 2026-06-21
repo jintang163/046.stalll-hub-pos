@@ -29,8 +29,84 @@
         <el-button type="warning" @click="handleCheckAlerts" :loading="checkingAlerts">
           <el-icon><Bell /></el-icon>检查告警
         </el-button>
+        <el-button type="info" @click="showAuthDialog = true">
+          <el-icon><Setting /></el-icon>平台授权
+        </el-button>
       </div>
     </div>
+
+    <el-dialog v-model="showAuthDialog" title="平台授权配置" width="600px" destroy-on-close>
+      <el-table :data="authList" v-loading="authLoading" border stripe>
+        <el-table-column prop="store_id" label="门店ID" width="80" align="center" />
+        <el-table-column label="门店" width="140" align="center">
+          <template #default="{ row }">{{ getStoreName(row.store_id) }}</template>
+        </el-table-column>
+        <el-table-column prop="platform" label="平台" width="120" align="center">
+          <template #default="{ row }">
+            <el-tag :type="row.platform === 'dianping' ? 'danger' : 'warning'">
+              {{ row.platform === 'dianping' ? '大众点评' : '美团' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="sync_status" label="同步状态" width="120" align="center">
+          <template #default="{ row }">
+            <el-tag :type="row.sync_status === 'success' ? 'success' : row.sync_status === 'syncing' ? 'warning' : row.sync_status === 'failed' ? 'danger' : 'info'" size="small">
+              {{ row.sync_status === 'success' ? '成功' : row.sync_status === 'syncing' ? '同步中' : row.sync_status === 'failed' ? '失败' : '待同步' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="last_sync_time" label="最后同步" width="170" align="center">
+          <template #default="{ row }">{{ row.last_sync_time || '从未同步' }}</template>
+        </el-table-column>
+        <el-table-column label="状态" width="100" align="center">
+          <template #default="{ row }">
+            <el-switch v-model="row.status" :active-value="1" :inactive-value="0" @change="toggleAuthStatus(row)" />
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="100" align="center" fixed="right">
+          <template #default="{ row }">
+            <el-button type="primary" link size="small" @click="editAuth(row)">编辑</el-button>
+            <el-button type="danger" link size="small" @click="deleteAuth(row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <div style="margin-top: 16px; text-align: right;">
+        <el-button type="primary" @click="addAuth">新增授权</el-button>
+      </div>
+    </el-dialog>
+
+    <el-dialog v-model="showAuthFormDialog" :title="authForm.id ? '编辑授权' : '新增授权'" width="500px" destroy-on-close>
+      <el-form :model="authForm" label-width="100px">
+        <el-form-item label="门店" required>
+          <el-select v-model="authForm.store_id" placeholder="选择门店" :disabled="!!authForm.id" style="width: 100%">
+            <el-option v-for="store in storeList" :key="store.id" :label="store.name" :value="store.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="平台" required>
+          <el-radio-group v-model="authForm.platform" :disabled="!!authForm.id">
+            <el-radio-button value="dianping">大众点评</el-radio-button>
+            <el-radio-button value="meituan">美团</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="店铺URL">
+          <el-input v-model="authForm.store_url" placeholder="大众点评/美团店铺页面URL" />
+        </el-form-item>
+        <el-form-item label="店铺ID">
+          <el-input v-model="authForm.shop_id" placeholder="平台分配的店铺ID" />
+        </el-form-item>
+        <el-form-item label="授权Token">
+          <el-input v-model="authForm.auth_token" placeholder="平台授权Token" type="password" show-password />
+        </el-form-item>
+        <el-form-item label="刷新Token">
+          <el-input v-model="authForm.refresh_token" placeholder="平台刷新Token" type="password" show-password />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showAuthFormDialog = false">取消</el-button>
+        <el-button type="primary" @click="saveAuth" :loading="authSaving">保存</el-button>
+      </template>
+    </el-dialog>
 
     <div class="summary-cards">
       <el-row :gutter="20">
@@ -162,8 +238,8 @@
 <script setup>
 import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Search, Refresh, Bell, Star, CircleCheck, ChatDotRound, Tickets } from '@element-plus/icons-vue'
-import { getRatingList, getRatingTrend, getReviewList, syncAllReviews, checkAlerts } from '@/api/review'
+import { Search, Refresh, Bell, Star, CircleCheck, ChatDotRound, Tickets, Setting } from '@element-plus/icons-vue'
+import { getRatingList, getRatingTrend, getReviewList, syncAllReviews, checkAlerts, listPlatformAuths, savePlatformAuth, getPlatformAuth } from '@/api/review'
 import { getStoreList } from '@/api/stores'
 import * as echarts from 'echarts'
 
@@ -206,6 +282,21 @@ const ratingPieChartRef = ref(null)
 let ratingTrendChart = null
 let reviewCountChart = null
 let ratingPieChart = null
+
+const showAuthDialog = ref(false)
+const showAuthFormDialog = ref(false)
+const authLoading = ref(false)
+const authSaving = ref(false)
+const authList = ref([])
+const authForm = reactive({
+  id: 0,
+  store_id: 0,
+  platform: 'dianping',
+  store_url: '',
+  shop_id: '',
+  auth_token: '',
+  refresh_token: ''
+})
 
 function getStoreName(id) {
   const store = storeList.value.find(s => s.id === id)
@@ -295,9 +386,15 @@ function computeSummary() {
 }
 
 async function handleSync() {
+  const activeAuths = authList.value.filter(a => a.status === 1)
+  if (activeAuths.length === 0) {
+    ElMessage.warning('未配置平台授权，请先在"平台授权"中配置授权信息后再同步')
+    showAuthDialog.value = true
+    return
+  }
   try {
     syncing.value = true
-    await syncAllReviews(getQueryParams())
+    await syncAllReviews()
     ElMessage.success('同步任务已启动，请稍后刷新查看')
     setTimeout(() => {
       fetchAllData()
@@ -312,17 +409,113 @@ async function handleSync() {
 async function handleCheckAlerts() {
   try {
     checkingAlerts.value = true
-    const res = await checkAlerts(getQueryParams())
-    const count = res?.data?.count || 0
-    if (count > 0) {
-      ElMessage.warning(`发现 ${count} 条告警，请及时处理`)
-    } else {
-      ElMessage.success('未发现告警')
-    }
+    await checkAlerts()
+    ElMessage.success('告警检查任务已启动')
   } catch (e) {
     ElMessage.error('检查告警失败')
   } finally {
     checkingAlerts.value = false
+  }
+}
+
+async function fetchAuthList() {
+  authLoading.value = true
+  try {
+    const res = await listPlatformAuths(0)
+    authList.value = res?.data || res || []
+  } catch (e) {
+    console.error('fetchAuthList error:', e)
+  } finally {
+    authLoading.value = false
+  }
+}
+
+function addAuth() {
+  Object.assign(authForm, {
+    id: 0,
+    store_id: storeList.value.length > 0 ? storeList.value[0].id : 0,
+    platform: 'dianping',
+    store_url: '',
+    shop_id: '',
+    auth_token: '',
+    refresh_token: ''
+  })
+  showAuthFormDialog.value = true
+}
+
+function editAuth(row) {
+  Object.assign(authForm, {
+    id: row.id,
+    store_id: row.store_id,
+    platform: row.platform,
+    store_url: row.store_url || '',
+    shop_id: row.shop_id || '',
+    auth_token: row.auth_token || '',
+    refresh_token: row.refresh_token || ''
+  })
+  showAuthFormDialog.value = true
+}
+
+async function saveAuth() {
+  if (!authForm.store_id) {
+    ElMessage.warning('请选择门店')
+    return
+  }
+  if (!authForm.platform) {
+    ElMessage.warning('请选择平台')
+    return
+  }
+  try {
+    authSaving.value = true
+    await savePlatformAuth({
+      store_id: authForm.store_id,
+      platform: authForm.platform,
+      store_url: authForm.store_url,
+      shop_id: authForm.shop_id,
+      auth_token: authForm.auth_token,
+      refresh_token: authForm.refresh_token
+    })
+    ElMessage.success('授权保存成功')
+    showAuthFormDialog.value = false
+    await fetchAuthList()
+  } catch (e) {
+    ElMessage.error('保存授权失败')
+  } finally {
+    authSaving.value = false
+  }
+}
+
+async function toggleAuthStatus(row) {
+  try {
+    await savePlatformAuth({
+      store_id: row.store_id,
+      platform: row.platform,
+      store_url: row.store_url,
+      shop_id: row.shop_id,
+      auth_token: row.auth_token,
+      refresh_token: row.refresh_token
+    })
+    ElMessage.success(row.status === 1 ? '已启用' : '已禁用')
+  } catch (e) {
+    ElMessage.error('更新状态失败')
+    row.status = row.status === 1 ? 0 : 1
+  }
+}
+
+async function deleteAuth(row) {
+  try {
+    await savePlatformAuth({
+      store_id: row.store_id,
+      platform: row.platform,
+      store_url: '',
+      shop_id: '',
+      auth_token: '',
+      refresh_token: ''
+    })
+    ElMessage.success('已删除')
+    await fetchAuthList()
+  } catch (e) {
+    ElMessage.error('删除失败')
   }
 }
 
@@ -547,7 +740,7 @@ function handleResize() {
 
 onMounted(async () => {
   await fetchStores()
-  await fetchAllData()
+  await Promise.all([fetchAllData(), fetchAuthList()])
   window.addEventListener('resize', handleResize)
 })
 
