@@ -8,6 +8,7 @@ import (
 	"stalll-hub-pos/backend/internal/consumer"
 	"stalll-hub-pos/backend/internal/model"
 	"stalll-hub-pos/backend/internal/service"
+	"stalll-hub-pos/backend/pkg/clickhouse"
 	"stalll-hub-pos/backend/pkg/database"
 	"stalll-hub-pos/backend/pkg/minio"
 	"stalll-hub-pos/backend/pkg/nsq"
@@ -24,6 +25,7 @@ func main() {
 	redis.InitRedis()
 	minio.InitMinIO()
 	nsq.InitProducer()
+	clickhouse.InitClickHouse()
 
 	database.AutoMigrate(
 		&model.Store{},
@@ -69,6 +71,9 @@ func main() {
 		&model.StallDailyReport{},
 		&model.StockCheck{},
 		&model.StockCheckItem{},
+		&model.ProductCost{},
+		&model.CostImportBatch{},
+		&model.ProfitReport{},
 	)
 
 	initDefaultData()
@@ -78,6 +83,8 @@ func main() {
 	initRecommendScheduler()
 
 	initMemberScheduler()
+
+	initClickHouseSync()
 
 	r := api.SetupRouter(database.DB, nsq.Producer)
 
@@ -213,4 +220,9 @@ func initMemberScheduler() {
 	schedulerService := service.NewSchedulerService()
 	schedulerService.StartAllSchedulers()
 	log.Println("Member system scheduler started (birthday coupons, recharge activities)")
+}
+
+func initClickHouseSync() {
+	chSyncService := service.NewClickHouseSyncService()
+	chSyncService.StartSyncScheduler()
 }

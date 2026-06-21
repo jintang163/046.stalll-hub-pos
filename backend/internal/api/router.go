@@ -36,6 +36,7 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 	queueHandler := handler.NewQueueHandler()
 	stockCheckHandler := handler.NewStockCheckHandler()
 	stockWarningHandler := handler.NewStockWarningHandler()
+	analyticsHandler := handler.NewAnalyticsHandler()
 
 	orderHandler := handler.NewOrderHandler(nil)
 
@@ -408,6 +409,18 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 		}
 
 		api.GET("/queue/ws", queueHandler.WebSocket)
+
+		analytics := api.Group("/analytics")
+		analytics.Use(middleware.JWTAuth())
+		{
+			analytics.GET("/revenue", analyticsHandler.GetRevenueReport)
+			analytics.GET("/hourly-trend", analyticsHandler.GetHourlyTrend)
+			analytics.GET("/top-products", analyticsHandler.GetTopProducts)
+			analytics.POST("/cost/import", analyticsHandler.ImportCostExcel)
+			analytics.GET("/cost/list", analyticsHandler.GetCostList)
+			analytics.GET("/profit/report", analyticsHandler.GetProfitReport)
+			analytics.GET("/profit/summary", analyticsHandler.GetProfitSummary)
+		}
 	}
 
 	return r

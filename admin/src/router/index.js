@@ -75,6 +75,18 @@ const routes = [
         meta: { title: '营业报表', icon: 'TrendCharts' }
       },
       {
+        path: 'analytics',
+        name: 'Analytics',
+        component: () => import('@/views/analytics/index.vue'),
+        meta: { title: '报表分析', icon: 'DataLine' }
+      },
+      {
+        path: 'profit',
+        name: 'Profit',
+        component: () => import('@/views/profit/index.vue'),
+        meta: { title: '利润分析', icon: 'Coin' }
+      },
+      {
         path: 'stores',
         name: 'Stores',
         component: () => import('@/views/stores/index.vue'),

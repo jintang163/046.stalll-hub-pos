@@ -14,8 +14,17 @@ type Config struct {
 	MinIO    MinIOConfig    `mapstructure:"minio"`
 	JWT      JWTConfig      `mapstructure:"jwt"`
 	Wechat   WechatConfig   `mapstructure:"wechat"`
-	Alipay   AlipayConfig   `mapstructure:"alipay"`
-	DingTalk DingTalkConfig `mapstructure:"dingtalk"`
+	Alipay     AlipayConfig     `mapstructure:"alipay"`
+	ClickHouse ClickHouseConfig `mapstructure:"clickhouse"`
+	DingTalk   DingTalkConfig   `mapstructure:"dingtalk"`
+}
+
+type ClickHouseConfig struct {
+	Host     string `mapstructure:"host"`
+	Port     string `mapstructure:"port"`
+	User     string `mapstructure:"user"`
+	Password string `mapstructure:"password"`
+	DBName   string `mapstructure:"dbname"`
 }
 
 type DingTalkConfig struct {

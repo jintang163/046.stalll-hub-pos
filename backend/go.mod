@@ -14,4 +14,6 @@ require (
 	golang.org/x/crypto v0.17.0
 	github.com/shopspring/decimal v1.3.1
 	github.com/gorilla/websocket v1.5.0
+	github.com/ClickHouse/clickhouse-go/v2 v2.23.0
+	github.com/xuri/excelize/v2 v2.8.1
 )

@@ -39,3 +39,10 @@ wechat:
   app_secret: your_app_secret
   mch_id: your_mch_id
   api_key: your_api_key
+
+clickhouse:
+  host: 127.0.0.1
+  port: "19000"
+  user: default
+  password: ""
+  dbname: stall_hub_pos
