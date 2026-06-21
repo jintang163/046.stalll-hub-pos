@@ -77,3 +77,11 @@ export function getStockWarnings(params) {
     params
   })
 }
+
+export const productApi = {
+  list: (params) => request.get('/products', { params }),
+  create: (data) => request.post('/products', data),
+  update: (id, data) => request.put(`/products/${id}`, data),
+  delete: (id) => request.delete(`/products/${id}`),
+  get: (id) => request.get(`/products/${id}`)
+}

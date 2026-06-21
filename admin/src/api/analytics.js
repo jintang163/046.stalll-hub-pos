@@ -70,3 +70,19 @@ export function getProfitSummary(params) {
     params
   })
 }
+
+export function getProfitReportV2(params) {
+  return request({
+    url: '/analytics/profit/report/v2',
+    method: 'get',
+    params
+  })
+}
+
+export function getProfitSummaryV2(params) {
+  return request({
+    url: '/analytics/profit/summary/v2',
+    method: 'get',
+    params
+  })
+}

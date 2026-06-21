@@ -187,3 +187,35 @@ func (h *AnalyticsHandler) TriggerFullBackfill(c *gin.Context) {
 func (h *AnalyticsHandler) GetSyncStatus(c *gin.Context) {
 	middleware.Success(c, gin.H{"status": "running"})
 }
+
+func (h *AnalyticsHandler) GetProfitReportV2(c *gin.Context) {
+	var query dto.ProfitReportQueryDTO
+	if err := c.ShouldBindQuery(&query); err != nil {
+		middleware.Error(c, "参数错误: "+err.Error())
+		return
+	}
+
+	report, err := h.costService.GetProfitReportV2(&query)
+	if err != nil {
+		middleware.Error(c, "获取利润报表失败: "+err.Error())
+		return
+	}
+
+	middleware.Success(c, report)
+}
+
+func (h *AnalyticsHandler) GetProfitSummaryV2(c *gin.Context) {
+	var query dto.ProfitReportQueryDTO
+	if err := c.ShouldBindQuery(&query); err != nil {
+		middleware.Error(c, "参数错误: "+err.Error())
+		return
+	}
+
+	summary, err := h.costService.GetProfitSummaryV2(&query)
+	if err != nil {
+		middleware.Error(c, "获取利润概览失败: "+err.Error())
+		return
+	}
+
+	middleware.Success(c, summary)
+}

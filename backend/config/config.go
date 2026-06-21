@@ -8,16 +8,18 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig   `mapstructure:"server"`
-	Database DatabaseConfig `mapstructure:"database"`
-	Redis    RedisConfig    `mapstructure:"redis"`
-	NSQ      NSQConfig      `mapstructure:"nsq"`
-	MinIO    MinIOConfig    `mapstructure:"minio"`
-	JWT      JWTConfig      `mapstructure:"jwt"`
-	Wechat   WechatConfig   `mapstructure:"wechat"`
-	Alipay     AlipayConfig     `mapstructure:"alipay"`
-	ClickHouse ClickHouseConfig `mapstructure:"clickhouse"`
-	DingTalk   DingTalkConfig   `mapstructure:"dingtalk"`
+	Server      ServerConfig      `mapstructure:"server"`
+	Database    DatabaseConfig    `mapstructure:"database"`
+	Redis       RedisConfig       `mapstructure:"redis"`
+	NSQ         NSQConfig         `mapstructure:"nsq"`
+	MinIO       MinIOConfig       `mapstructure:"minio"`
+	JWT         JWTConfig         `mapstructure:"jwt"`
+	Wechat      WechatConfig      `mapstructure:"wechat"`
+	Alipay      AlipayConfig      `mapstructure:"alipay"`
+	ClickHouse  ClickHouseConfig  `mapstructure:"clickhouse"`
+	DingTalk    DingTalkConfig    `mapstructure:"dingtalk"`
+	Inventory   InventoryConfig   `mapstructure:"inventory"`
+	CostAlert   CostAlertConfig   `mapstructure:"cost_alert"`
 }
 
 type ClickHouseConfig struct {
@@ -31,6 +33,21 @@ type ClickHouseConfig struct {
 type DingTalkConfig struct {
 	Webhook string `mapstructure:"webhook"`
 	Secret  string `mapstructure:"secret"`
+}
+
+type InventoryConfig struct {
+	Enabled        bool   `mapstructure:"enabled"`
+	BaseURL        string `mapstructure:"base_url"`
+	APIKey         string `mapstructure:"api_key"`
+	APISecret      string `mapstructure:"api_secret"`
+	SyncInterval   int    `mapstructure:"sync_interval"`
+	TimeoutSeconds int    `mapstructure:"timeout_seconds"`
+}
+
+type CostAlertConfig struct {
+	Enabled          bool    `mapstructure:"enabled"`
+	PriceChangeThreshold float64 `mapstructure:"price_change_threshold"`
+	CooldownHours    int     `mapstructure:"cooldown_hours"`
 }
 
 type ServerConfig struct {

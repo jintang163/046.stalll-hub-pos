@@ -74,6 +74,10 @@ func main() {
 		&model.ProductCost{},
 		&model.CostImportBatch{},
 		&model.ProfitReport{},
+		&model.Ingredient{},
+		&model.ProductBOM{},
+		&model.IngredientPrice{},
+		&model.CostAlert{},
 	)
 
 	initDefaultData()
@@ -85,6 +89,8 @@ func main() {
 	initMemberScheduler()
 
 	initClickHouseSync()
+
+	initInventorySync()
 
 	r := api.SetupRouter(database.DB, nsq.Producer)
 
@@ -225,4 +231,10 @@ func initMemberScheduler() {
 func initClickHouseSync() {
 	chSyncService := service.NewClickHouseSyncService()
 	chSyncService.StartSyncScheduler()
+}
+
+func initInventorySync() {
+	inventoryService := service.NewInventorySyncService()
+	inventoryService.StartSyncScheduler()
+	log.Println("Inventory sync scheduler initialized")
 }

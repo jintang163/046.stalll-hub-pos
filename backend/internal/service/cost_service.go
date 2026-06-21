@@ -390,3 +390,139 @@ func (s *CostService) GetProfitSummary(query *dto.ProfitReportQueryDTO) (*dto.Pr
 		ProductCount: productCount,
 	}, nil
 }
+
+func (s *CostService) GetProfitReportV2(query *dto.ProfitReportQueryDTO) ([]dto.ProfitReportV2Response, error) {
+	startDate := query.StartDate
+	endDate := query.EndDate
+
+	type SalesData struct {
+		ProductID   uint
+		ProductName string
+		Quantity    int
+		Revenue     decimal.Decimal
+	}
+
+	var salesData []SalesData
+	db := database.DB.Table("order_items oi").
+		Select(`oi.product_id, oi.product_name, SUM(oi.quantity) as quantity, SUM(oi.subtotal) as revenue`).
+		Joins("LEFT JOIN orders o ON oi.order_id = o.id").
+		Where("o.created_at >= ? AND o.created_at <= ?", startDate+" 00:00:00", endDate+" 23:59:59").
+		Where("o.order_status != ? AND o.pay_status = ? AND oi.status = ?", -1, 1, 1)
+
+	if query.StoreID > 0 {
+		db = db.Where("o.store_id = ?", query.StoreID)
+	}
+	db = db.Group("oi.product_id, oi.product_name").Order("revenue DESC").Scan(&salesData)
+
+	var productIDs []uint
+	for _, s := range salesData {
+		productIDs = append(productIDs, s.ProductID)
+	}
+
+	bomService := NewBOMService()
+	bomCostMap, _ := bomService.BatchCalculateProductCosts(productIDs)
+
+	staticCostMap := make(map[uint]decimal.Decimal)
+	if len(productIDs) > 0 {
+		type ProductCostRow struct {
+			ProductID uint
+			UnitCost  decimal.Decimal
+		}
+		var costRows []ProductCostRow
+		database.DB.Model(&model.ProductCost{}).
+			Where("product_id IN ? AND effective_date <= ?", productIDs, endDate).
+			Select("product_id, MAX(unit_cost) as unit_cost").
+			Group("product_id").
+			Scan(&costRows)
+		for _, c := range costRows {
+			staticCostMap[c.ProductID] = c.UnitCost
+		}
+	}
+
+	var results []dto.ProfitReportV2Response
+	for _, s := range salesData {
+		unitCost, hasBOMCost := bomCostMap[s.ProductID]
+		if !hasBOMCost || unitCost.IsZero() {
+			unitCost = staticCostMap[s.ProductID]
+		}
+
+		unitPrice := decimal.Zero
+		if s.Quantity > 0 {
+			unitPrice = s.Revenue.Div(decimal.NewFromInt(int64(s.Quantity)))
+		}
+
+		totalMaterialCost := unitCost.Mul(decimal.NewFromInt(int64(s.Quantity)))
+		grossProfit := s.Revenue.Sub(totalMaterialCost)
+		var grossMargin decimal.Decimal
+		if s.Revenue.GreaterThan(decimal.Zero) {
+			grossMargin = grossProfit.Div(s.Revenue).Mul(decimal.NewFromInt(100))
+		}
+
+		results = append(results, dto.ProfitReportV2Response{
+			ProductID:    s.ProductID,
+			ProductName:  s.ProductName,
+			Quantity:     s.Quantity,
+			Revenue:      s.Revenue,
+			MaterialCost: totalMaterialCost,
+			GrossProfit:  grossProfit,
+			GrossMargin:  grossMargin,
+			UnitPrice:    unitPrice,
+			UnitCost:     unitCost,
+		})
+	}
+
+	return results, nil
+}
+
+func (s *CostService) GetProfitSummaryV2(query *dto.ProfitReportQueryDTO) (*dto.ProfitSummaryV2Response, error) {
+	report, err := s.GetProfitReportV2(query)
+	if err != nil {
+		return nil, err
+	}
+
+	var totalRevenue, totalMaterialCost decimal.Decimal
+	var productCount, orderCount int
+
+	for _, r := range report {
+		totalRevenue = totalRevenue.Add(r.Revenue)
+		totalMaterialCost = totalMaterialCost.Add(r.MaterialCost)
+		productCount++
+	}
+
+	if query.StoreID > 0 {
+		type OrderCountResult struct {
+			Count int64
+		}
+		var result OrderCountResult
+		database.DB.Table("orders").
+			Where("store_id = ? AND created_at >= ? AND created_at <= ?",
+				query.StoreID, query.StartDate+" 00:00:00", query.EndDate+" 23:59:59").
+			Where("order_status != ? AND pay_status = ?", -1, 1).
+			Select("COUNT(DISTINCT id) as count").
+			Scan(&result)
+		orderCount = int(result.Count)
+	}
+
+	grossProfit := totalRevenue.Sub(totalMaterialCost)
+	var grossMargin decimal.Decimal
+	if totalRevenue.GreaterThan(decimal.Zero) {
+		grossMargin = grossProfit.Div(totalRevenue).Mul(decimal.NewFromInt(100))
+	}
+
+	netProfit := grossProfit
+	var netMargin decimal.Decimal
+	if totalRevenue.GreaterThan(decimal.Zero) {
+		netMargin = netProfit.Div(totalRevenue).Mul(decimal.NewFromInt(100))
+	}
+
+	return &dto.ProfitSummaryV2Response{
+		TotalRevenue:      totalRevenue,
+		TotalMaterialCost: totalMaterialCost,
+		GrossProfit:       grossProfit,
+		GrossMargin:       grossMargin,
+		NetProfit:         netProfit,
+		NetMargin:         netMargin,
+		ProductCount:      productCount,
+		OrderCount:        orderCount,
+	}, nil
+}

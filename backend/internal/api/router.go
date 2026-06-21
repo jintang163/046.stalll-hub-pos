@@ -37,6 +37,7 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 	stockCheckHandler := handler.NewStockCheckHandler()
 	stockWarningHandler := handler.NewStockWarningHandler()
 	analyticsHandler := handler.NewAnalyticsHandler()
+	ingredientHandler := handler.NewIngredientHandler()
 
 	orderHandler := handler.NewOrderHandler(nil)
 
@@ -422,6 +423,41 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 			analytics.GET("/cost/list", analyticsHandler.GetCostList)
 			analytics.GET("/profit/report", analyticsHandler.GetProfitReport)
 			analytics.GET("/profit/summary", analyticsHandler.GetProfitSummary)
+			analytics.GET("/profit/report/v2", analyticsHandler.GetProfitReportV2)
+			analytics.GET("/profit/summary/v2", analyticsHandler.GetProfitSummaryV2)
+		}
+
+		ingredients := api.Group("/ingredients")
+		ingredients.Use(middleware.JWTAuth())
+		{
+			ingredients.GET("", ingredientHandler.GetIngredients)
+			ingredients.GET("/categories", ingredientHandler.GetIngredientCategories)
+			ingredients.GET("/:id", ingredientHandler.GetIngredient)
+			ingredients.POST("", ingredientHandler.CreateIngredient)
+			ingredients.PUT("/:id", ingredientHandler.UpdateIngredient)
+			ingredients.DELETE("/:id", ingredientHandler.DeleteIngredient)
+			ingredients.GET("/:id/price-history", ingredientHandler.GetPriceHistory)
+		}
+
+		bom := api.Group("/bom")
+		bom.Use(middleware.JWTAuth())
+		{
+			bom.GET("/:product_id", ingredientHandler.GetProductBOM)
+			bom.POST("/save", ingredientHandler.SaveProductBOM)
+			bom.GET("/:product_id/cost-detail", ingredientHandler.GetProductCostDetail)
+		}
+
+		costAlerts := api.Group("/cost-alerts")
+		costAlerts.Use(middleware.JWTAuth())
+		{
+			costAlerts.GET("", ingredientHandler.GetCostAlerts)
+			costAlerts.POST("/handle", ingredientHandler.HandleAlert)
+		}
+
+		inventory := api.Group("/inventory")
+		inventory.Use(middleware.JWTAuth())
+		{
+			inventory.POST("/sync", ingredientHandler.TriggerInventorySync)
 		}
 	}
 

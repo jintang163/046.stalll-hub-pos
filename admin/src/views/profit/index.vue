@@ -15,6 +15,10 @@
           <el-option label="全部门店" :value="0" />
           <el-option v-for="store in storeList" :key="store.id" :label="store.name" :value="store.id" />
         </el-select>
+        <el-select v-model="costMode" placeholder="成本模式" style="width: 140px" @change="fetchData">
+          <el-option label="静态成本" value="static" />
+          <el-option label="BOM动态成本" value="bom" />
+        </el-select>
         <el-button type="primary" @click="fetchData">
           <el-icon><Search /></el-icon>查询
         </el-button>
@@ -26,39 +30,57 @@
 
     <div class="summary-cards">
       <el-row :gutter="20">
-        <el-col :span="6">
+        <el-col :span="4">
           <div class="summary-card revenue">
-            <div class="card-icon"><el-icon :size="28"><Money /></el-icon></div>
+            <div class="card-icon"><el-icon :size="24"><Money /></el-icon></div>
             <div class="card-info">
               <div class="card-label">总营业额</div>
               <div class="card-value">¥{{ formatAmount(profitSummary.total_revenue) }}</div>
             </div>
           </div>
         </el-col>
-        <el-col :span="6">
+        <el-col :span="4">
           <div class="summary-card cost">
-            <div class="card-icon"><el-icon :size="28"><ShoppingCart /></el-icon></div>
+            <div class="card-icon"><el-icon :size="24"><ShoppingCart /></el-icon></div>
             <div class="card-info">
-              <div class="card-label">总成本</div>
-              <div class="card-value">¥{{ formatAmount(profitSummary.total_cost) }}</div>
+              <div class="card-label">食材成本</div>
+              <div class="card-value">¥{{ formatAmount(profitSummary.total_material_cost || profitSummary.total_cost) }}</div>
             </div>
           </div>
         </el-col>
-        <el-col :span="6">
+        <el-col :span="4">
           <div class="summary-card profit">
-            <div class="card-icon"><el-icon :size="28"><TrendCharts /></el-icon></div>
+            <div class="card-icon"><el-icon :size="24"><TrendCharts /></el-icon></div>
             <div class="card-info">
               <div class="card-label">毛利润</div>
               <div class="card-value">¥{{ formatAmount(profitSummary.gross_profit) }}</div>
             </div>
           </div>
         </el-col>
-        <el-col :span="6">
+        <el-col :span="4">
           <div class="summary-card margin">
-            <div class="card-icon"><el-icon :size="28"><DataAnalysis /></el-icon></div>
+            <div class="card-icon"><el-icon :size="24"><DataAnalysis /></el-icon></div>
             <div class="card-info">
               <div class="card-label">毛利率</div>
               <div class="card-value">{{ formatMargin(profitSummary.gross_margin) }}%</div>
+            </div>
+          </div>
+        </el-col>
+        <el-col :span="4">
+          <div class="summary-card net-profit">
+            <div class="card-icon"><el-icon :size="24"><GoldMedal /></el-icon></div>
+            <div class="card-info">
+              <div class="card-label">净利润</div>
+              <div class="card-value">¥{{ formatAmount(profitSummary.net_profit || profitSummary.gross_profit) }}</div>
+            </div>
+          </div>
+        </el-col>
+        <el-col :span="4">
+          <div class="summary-card net-margin">
+            <div class="card-icon"><el-icon :size="24"><Histogram /></el-icon></div>
+            <div class="card-info">
+              <div class="card-label">净利率</div>
+              <div class="card-value">{{ formatMargin(profitSummary.net_margin || profitSummary.gross_margin) }}%</div>
             </div>
           </div>
         </el-col>
@@ -85,27 +107,30 @@
       <el-table :data="profitReport" v-loading="loading" border stripe>
         <el-table-column type="index" label="#" width="60" align="center" />
         <el-table-column prop="product_name" label="菜品名称" min-width="180" />
-        <el-table-column prop="quantity" label="销量" width="100" align="center">
+        <el-table-column prop="quantity" label="销量" width="90" align="center">
           <template #default="{ row }">
             <span class="highlight">{{ row.quantity || 0 }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="revenue" label="营收(元)" width="130" align="center">
-          <template #default="{ row }">
-            <span class="amount">¥{{ formatAmount(row.revenue) }}</span>
-          </template>
+        <el-table-column prop="unit_price" label="单价" width="100" align="center">
+          <template #default="{ row }">¥{{ formatAmount(row.unit_price) }}</template>
         </el-table-column>
-        <el-table-column prop="unit_cost" label="单位成本" width="110" align="center">
+        <el-table-column prop="unit_cost" label="单位成本" width="100" align="center">
           <template #default="{ row }">
             ¥{{ formatAmount(row.unit_cost) }}
           </template>
         </el-table-column>
-        <el-table-column prop="total_cost" label="总成本(元)" width="130" align="center">
+        <el-table-column prop="revenue" label="营收(元)" width="120" align="center">
           <template #default="{ row }">
-            <span class="cost-text">¥{{ formatAmount(row.total_cost) }}</span>
+            <span class="amount">¥{{ formatAmount(row.revenue) }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="gross_profit" label="毛利(元)" width="130" align="center">
+        <el-table-column prop="material_cost" label="食材成本(元)" width="120" align="center">
+          <template #default="{ row }">
+            <span class="cost-text">¥{{ formatAmount(row.material_cost || row.total_cost) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="gross_profit" label="毛利(元)" width="110" align="center">
           <template #default="{ row }">
             <span :class="Number(row.gross_profit) >= 0 ? 'profit-text' : 'loss-text'">
               ¥{{ formatAmount(row.gross_profit) }}
@@ -162,8 +187,8 @@
 <script setup>
 import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Search, Upload, Money, ShoppingCart, TrendCharts, DataAnalysis } from '@element-plus/icons-vue'
-import { getProfitReport, getProfitSummary, importCostExcel } from '@/api/analytics'
+import { Search, Upload, Money, ShoppingCart, TrendCharts, DataAnalysis, GoldMedal, Histogram } from '@element-plus/icons-vue'
+import { getProfitReport, getProfitSummary, getProfitReportV2, getProfitSummaryV2, importCostExcel } from '@/api/analytics'
 import { storeApi } from '@/api/stores'
 import * as echarts from 'echarts'
 
@@ -175,13 +200,18 @@ const storeId = ref(0)
 const storeList = ref([])
 const profitReport = ref([])
 const uploadFile = ref(null)
+const costMode = ref('static')
 
 const profitSummary = reactive({
   total_revenue: 0,
   total_cost: 0,
+  total_material_cost: 0,
   gross_profit: 0,
   gross_margin: 0,
-  product_count: 0
+  net_profit: 0,
+  net_margin: 0,
+  product_count: 0,
+  order_count: 0
 })
 
 const today = new Date()
@@ -283,10 +313,18 @@ async function fetchStores() {
 async function fetchData() {
   loading.value = true
   try {
-    const [summaryRes, reportRes] = await Promise.all([
-      getProfitSummary(getQueryParams()),
-      getProfitReport(getQueryParams())
-    ])
+    let summaryRes, reportRes
+    if (costMode.value === 'bom') {
+      [summaryRes, reportRes] = await Promise.all([
+        getProfitSummaryV2(getQueryParams()),
+        getProfitReportV2(getQueryParams())
+      ])
+    } else {
+      [summaryRes, reportRes] = await Promise.all([
+        getProfitSummary(getQueryParams()),
+        getProfitReport(getQueryParams())
+      ])
+    }
 
     const s = summaryRes?.data || summaryRes || {}
     Object.assign(profitSummary, s)
@@ -310,7 +348,7 @@ function renderCompareChart() {
   const top10 = profitReport.value.slice(0, 10)
   const names = top10.map(p => p.product_name)
   const revenues = top10.map(p => Number(p.revenue || 0))
-  const costs = top10.map(p => Number(p.total_cost || 0))
+  const costs = top10.map(p => Number(p.material_cost || p.total_cost || 0))
 
   compareChart.setOption({
     tooltip: {
@@ -457,6 +495,8 @@ onBeforeUnmount(() => {
     &.cost { border-left-color: #e6a23c; }
     &.profit { border-left-color: #67c23a; }
     &.margin { border-left-color: #f56c6c; }
+    &.net-profit { border-left-color: #722ed1; }
+    &.net-margin { border-left-color: #13c2c2; }
 
     .card-icon {
       width: 56px;
@@ -472,6 +512,8 @@ onBeforeUnmount(() => {
     &.cost .card-icon { background: linear-gradient(135deg, #e6a23c, #eebe77); }
     &.profit .card-icon { background: linear-gradient(135deg, #67c23a, #95d475); }
     &.margin .card-icon { background: linear-gradient(135deg, #f56c6c, #f89898); }
+    &.net-profit .card-icon { background: linear-gradient(135deg, #722ed1, #b37feb); }
+    &.net-margin .card-icon { background: linear-gradient(135deg, #13c2c2, #5cd3d3); }
 
     .card-info {
       flex: 1;

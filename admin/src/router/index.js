@@ -87,6 +87,24 @@ const routes = [
         meta: { title: '利润分析', icon: 'Coin' }
       },
       {
+        path: 'ingredients',
+        name: 'Ingredients',
+        component: () => import('@/views/ingredients/index.vue'),
+        meta: { title: '食材管理', icon: 'Apple' }
+      },
+      {
+        path: 'bom',
+        name: 'BOM',
+        component: () => import('@/views/bom/index.vue'),
+        meta: { title: 'BOM管理', icon: 'Grid' }
+      },
+      {
+        path: 'cost-alerts',
+        name: 'CostAlerts',
+        component: () => import('@/views/cost-alerts/index.vue'),
+        meta: { title: '成本告警', icon: 'Bell' }
+      },
+      {
         path: 'stores',
         name: 'Stores',
         component: () => import('@/views/stores/index.vue'),
