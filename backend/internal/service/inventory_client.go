@@ -107,8 +107,11 @@ func (c *InventoryClient) doRequest(method, path string, body interface{}) ([]by
 	return respBody, nil
 }
 
-func (c *InventoryClient) GetIngredients(page, pageSize int) (*InventoryResponse, error) {
+func (c *InventoryClient) GetIngredients(storeID uint, page, pageSize int) (*InventoryResponse, error) {
 	path := fmt.Sprintf("/api/ingredients?page=%d&page_size=%d", page, pageSize)
+	if storeID > 0 {
+		path += fmt.Sprintf("&store_id=%d", storeID)
+	}
 
 	respBody, err := c.doRequest("GET", path, nil)
 	if err != nil {
@@ -127,13 +130,13 @@ func (c *InventoryClient) GetIngredients(page, pageSize int) (*InventoryResponse
 	return &resp, nil
 }
 
-func (c *InventoryClient) GetAllIngredients() ([]InventoryIngredient, error) {
+func (c *InventoryClient) GetAllIngredients(storeID uint) ([]InventoryIngredient, error) {
 	var allIngredients []InventoryIngredient
 	page := 1
 	pageSize := 100
 
 	for {
-		resp, err := c.GetIngredients(page, pageSize)
+		resp, err := c.GetIngredients(storeID, page, pageSize)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get ingredients page %d: %v", page, err)
 		}
@@ -147,6 +150,6 @@ func (c *InventoryClient) GetAllIngredients() ([]InventoryIngredient, error) {
 		page++
 	}
 
-	log.Printf("[Inventory] Fetched %d ingredients from inventory system", len(allIngredients))
+	log.Printf("[Inventory] Fetched %d ingredients from inventory system (store_id=%d)", len(allIngredients), storeID)
 	return allIngredients, nil
 }

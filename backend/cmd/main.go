@@ -92,6 +92,8 @@ func main() {
 
 	initInventorySync()
 
+	initCostAlert()
+
 	r := api.SetupRouter(database.DB, nsq.Producer)
 
 	defer nsq.StopProducer()
@@ -234,7 +236,31 @@ func initClickHouseSync() {
 }
 
 func initInventorySync() {
+	if !config.AppConfig.Inventory.Enabled {
+		log.Println("[Config] inventory.enabled=false, skipping inventory sync. " +
+			"Set INVENTORY_ENABLED=true or inventory.enabled=true in config.yaml to enable.")
+		return
+	}
+	if config.AppConfig.Inventory.BaseURL == "" {
+		log.Println("[Config] inventory.base_url is empty, skipping inventory sync.")
+		return
+	}
 	inventoryService := service.NewInventorySyncService()
 	inventoryService.StartSyncScheduler()
-	log.Println("Inventory sync scheduler initialized")
+}
+
+func initCostAlert() {
+	if !config.AppConfig.CostAlert.Enabled {
+		log.Println("[Config] cost_alert.enabled=false, skipping cost alert. " +
+			"Set COST_ALERT_ENABLED=true or cost_alert.enabled=true in config.yaml to enable.")
+		return
+	}
+	if config.AppConfig.DingTalk.Webhook == "" {
+		log.Println("[Config] dingtalk.webhook is empty, cost alert DingTalk notifications will be disabled. " +
+			"Set DINGTALK_WEBHOOK or dingtalk.webhook in config.yaml to enable notifications.")
+	}
+	log.Printf("[Config] Cost alert enabled: threshold=%.1f%%, cooldown=%dh, operating_expense_rate=%.1f%%",
+		config.AppConfig.CostAlert.PriceChangeThreshold,
+		config.AppConfig.CostAlert.CooldownHours,
+		config.AppConfig.CostAlert.OperatingExpenseRate)
 }

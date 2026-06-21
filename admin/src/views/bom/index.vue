@@ -214,7 +214,7 @@ function loadProducts() {
 }
 
 function loadIngredients() {
-  ingredientApi.getIngredients({
+  bomApi.getIngredients({
     store_id: searchForm.store_id,
     status: 1,
     page: 1,
@@ -232,7 +232,7 @@ function selectProduct(row) {
 
 function loadBOM() {
   if (!searchForm.product_id) return
-  ingredientApi.getProductBOM(searchForm.product_id).then(res => {
+  bomApi.getProductBOM(searchForm.product_id).then(res => {
     bomItems.value = res.data || []
   })
 }
@@ -332,7 +332,7 @@ function saveBOM() {
     sort_order: index + 1
   }))
 
-  ingredientApi.saveProductBOM({
+  bomApi.saveProductBOM({
     store_id: searchForm.store_id,
     product_id: searchForm.product_id,
     items: items
@@ -346,7 +346,7 @@ function saveBOM() {
 
 function viewCostDetail() {
   if (!selectedProduct.value) return
-  ingredientApi.getProductCostDetail(searchForm.product_id).then(res => {
+  bomApi.getProductCostDetail(searchForm.product_id).then(res => {
     costDetail.value = res.data
     costDetailVisible.value = true
   })

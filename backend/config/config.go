@@ -45,9 +45,10 @@ type InventoryConfig struct {
 }
 
 type CostAlertConfig struct {
-	Enabled          bool    `mapstructure:"enabled"`
+	Enabled              bool    `mapstructure:"enabled"`
 	PriceChangeThreshold float64 `mapstructure:"price_change_threshold"`
-	CooldownHours    int     `mapstructure:"cooldown_hours"`
+	CooldownHours        int     `mapstructure:"cooldown_hours"`
+	OperatingExpenseRate float64 `mapstructure:"operating_expense_rate"`
 }
 
 type ServerConfig struct {

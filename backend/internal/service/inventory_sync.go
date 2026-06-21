@@ -70,7 +70,7 @@ func (s *InventorySyncService) SyncAllStores() {
 func (s *InventorySyncService) SyncStoreIngredients(storeID uint) error {
 	log.Printf("[InventorySync] Start syncing ingredients for store %d", storeID)
 
-	ingredients, err := s.client.GetAllIngredients()
+	ingredients, err := s.client.GetAllIngredients(storeID)
 	if err != nil {
 		return fmt.Errorf("failed to fetch ingredients: %v", err)
 	}

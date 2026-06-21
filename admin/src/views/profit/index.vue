@@ -71,7 +71,7 @@
             <div class="card-icon"><el-icon :size="24"><GoldMedal /></el-icon></div>
             <div class="card-info">
               <div class="card-label">净利润</div>
-              <div class="card-value">¥{{ formatAmount(profitSummary.net_profit || profitSummary.gross_profit) }}</div>
+              <div class="card-value">¥{{ formatAmount(profitSummary.net_profit) }}</div>
             </div>
           </div>
         </el-col>
@@ -80,7 +80,7 @@
             <div class="card-icon"><el-icon :size="24"><Histogram /></el-icon></div>
             <div class="card-info">
               <div class="card-label">净利率</div>
-              <div class="card-value">{{ formatMargin(profitSummary.net_margin || profitSummary.gross_margin) }}%</div>
+              <div class="card-value">{{ formatMargin(profitSummary.net_margin) }}%</div>
             </div>
           </div>
         </el-col>
@@ -208,6 +208,8 @@ const profitSummary = reactive({
   total_material_cost: 0,
   gross_profit: 0,
   gross_margin: 0,
+  operating_expense: 0,
+  operating_expense_rate: 0,
   net_profit: 0,
   net_margin: 0,
   product_count: 0,
@@ -328,6 +330,18 @@ async function fetchData() {
 
     const s = summaryRes?.data || summaryRes || {}
     Object.assign(profitSummary, s)
+
+    if (costMode.value === 'static' && !s.net_profit && s.net_profit !== 0) {
+      const expenseRate = s.operating_expense_rate || 15
+      const operatingExpense = Number(s.total_revenue || 0) * expenseRate / 100
+      profitSummary.operating_expense = operatingExpense
+      profitSummary.operating_expense_rate = expenseRate
+      profitSummary.net_profit = Number(s.gross_profit || 0) - operatingExpense
+      profitSummary.net_margin = Number(s.total_revenue || 0) > 0
+        ? (profitSummary.net_profit / Number(s.total_revenue) * 100)
+        : 0
+    }
+
     profitReport.value = reportRes?.data?.list || reportRes?.data || reportRes || []
 
     renderCompareChart()

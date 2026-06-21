@@ -67,14 +67,16 @@ type IngredientPriceQueryDTO struct {
 }
 
 type ProfitSummaryV2Response struct {
-	TotalRevenue    decimal.Decimal `json:"total_revenue"`
-	TotalMaterialCost decimal.Decimal `json:"total_material_cost"`
-	GrossProfit     decimal.Decimal `json:"gross_profit"`
-	GrossMargin     decimal.Decimal `json:"gross_margin"`
-	NetProfit       decimal.Decimal `json:"net_profit"`
-	NetMargin       decimal.Decimal `json:"net_margin"`
-	ProductCount    int             `json:"product_count"`
-	OrderCount      int             `json:"order_count"`
+	TotalRevenue        decimal.Decimal `json:"total_revenue"`
+	TotalMaterialCost   decimal.Decimal `json:"total_material_cost"`
+	GrossProfit         decimal.Decimal `json:"gross_profit"`
+	GrossMargin         decimal.Decimal `json:"gross_margin"`
+	OperatingExpense    decimal.Decimal `json:"operating_expense"`
+	OperatingExpenseRate decimal.Decimal `json:"operating_expense_rate"`
+	NetProfit           decimal.Decimal `json:"net_profit"`
+	NetMargin           decimal.Decimal `json:"net_margin"`
+	ProductCount        int             `json:"product_count"`
+	OrderCount          int             `json:"order_count"`
 }
 
 type ProfitReportV2Response struct {

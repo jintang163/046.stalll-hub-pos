@@ -160,7 +160,7 @@ function loadStores() {
 function fetchList() {
   loading.value = true
   const status = showUnreadOnly.value ? 0 : searchForm.status
-  ingredientApi.getCostAlerts({
+  alertApi.getCostAlerts({
     store_id: searchForm.store_id,
     status: status,
     page: pagination.page,
@@ -193,7 +193,7 @@ function submitHandle() {
     ElMessage.warning('请输入处理人')
     return
   }
-  ingredientApi.handleCostAlert(handleForm).then(() => {
+  alertApi.handleCostAlert(handleForm).then(() => {
     ElMessage.success('处理成功')
     handleDialogVisible.value = false
     fetchList()

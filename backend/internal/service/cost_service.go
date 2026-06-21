@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/shopspring/decimal"
+	"stalll-hub-pos/backend/config"
 	"stalll-hub-pos/backend/internal/dto"
 	"stalll-hub-pos/backend/internal/model"
 	"stalll-hub-pos/backend/pkg/database"
@@ -509,20 +510,27 @@ func (s *CostService) GetProfitSummaryV2(query *dto.ProfitReportQueryDTO) (*dto.
 		grossMargin = grossProfit.Div(totalRevenue).Mul(decimal.NewFromInt(100))
 	}
 
-	netProfit := grossProfit
+	operatingExpenseRate := decimal.NewFromFloat(config.AppConfig.CostAlert.OperatingExpenseRate)
+	if operatingExpenseRate.LessThanOrEqual(decimal.Zero) {
+		operatingExpenseRate = decimal.NewFromFloat(15.0)
+	}
+	operatingExpense := totalRevenue.Mul(operatingExpenseRate).Div(decimal.NewFromInt(100))
+	netProfit := grossProfit.Sub(operatingExpense)
 	var netMargin decimal.Decimal
 	if totalRevenue.GreaterThan(decimal.Zero) {
 		netMargin = netProfit.Div(totalRevenue).Mul(decimal.NewFromInt(100))
 	}
 
 	return &dto.ProfitSummaryV2Response{
-		TotalRevenue:      totalRevenue,
-		TotalMaterialCost: totalMaterialCost,
-		GrossProfit:       grossProfit,
-		GrossMargin:       grossMargin,
-		NetProfit:         netProfit,
-		NetMargin:         netMargin,
-		ProductCount:      productCount,
-		OrderCount:        orderCount,
+		TotalRevenue:        totalRevenue,
+		TotalMaterialCost:   totalMaterialCost,
+		GrossProfit:         grossProfit,
+		GrossMargin:         grossMargin,
+		OperatingExpense:    operatingExpense,
+		OperatingExpenseRate: operatingExpenseRate,
+		NetProfit:           netProfit,
+		NetMargin:           netMargin,
+		ProductCount:        productCount,
+		OrderCount:          orderCount,
 	}, nil
 }

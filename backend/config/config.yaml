@@ -63,3 +63,6 @@ cost_alert:
   enabled: false
   price_change_threshold: 20.0
   cooldown_hours: 24
+  operating_expense_rate: 15.0
+
+
