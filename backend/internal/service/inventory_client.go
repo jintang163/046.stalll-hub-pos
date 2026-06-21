@@ -30,7 +30,11 @@ type InventoryIngredient struct {
 	Category     string          `json:"category"`
 	Unit         string          `json:"unit"`
 	Price        decimal.Decimal `json:"price"`
+	CurrentStock decimal.Decimal `json:"current_stock"`
+	StockUnit    string          `json:"stock_unit"`
 	Supplier     string          `json:"supplier"`
+	SupplierPhone string         `json:"supplier_phone"`
+	SupplierEmail string         `json:"supplier_email"`
 	Status       int             `json:"status"`
 }
 

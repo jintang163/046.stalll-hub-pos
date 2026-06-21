@@ -197,7 +197,7 @@ func (s *DingTalkService) SendStockCheckComplete(checkNo, title string, totalSKU
 	return s.SendMarkdown(titleMsg, text, false, nil)
 }
 
-func (s *DingTalkService) SendPurchaseOrderNotification(purchase *model.PurchaseOrder, excelPath string) error {
+func (s *DingTalkService) SendPurchaseOrderNotification(purchase *model.PurchaseOrder, fileURL string) error {
 	title := fmt.Sprintf("【采购单】%s", purchase.PurchaseNo)
 	text := fmt.Sprintf("## 📦 新采购单通知\n\n"+
 		"- **采购单号**：%s\n"+
@@ -239,8 +239,8 @@ func (s *DingTalkService) SendPurchaseOrderNotification(purchase *model.Purchase
 		text += fmt.Sprintf("> 备注：%s\n\n", purchase.Remark)
 	}
 
-	if excelPath != "" {
-		text += "📎 采购单Excel已生成，请查看附件。\n"
+	if fileURL != "" {
+		text += fmt.Sprintf("📎 **[点击下载采购单Excel](%s)**（7天内有效）\n\n", fileURL)
 	}
 
 	text += "⚠️ 请及时确认并安排发货。"

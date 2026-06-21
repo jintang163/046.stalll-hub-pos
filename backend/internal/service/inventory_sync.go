@@ -113,7 +113,11 @@ func (s *InventorySyncService) syncSingleIngredient(storeID uint, invIng Invento
 			Category:     invIng.Category,
 			Unit:         invIng.Unit,
 			CurrentPrice: invIng.Price,
+			CurrentStock: invIng.CurrentStock,
+			StockUnit:    invIng.StockUnit,
 			Supplier:     invIng.Supplier,
+			SupplierPhone: invIng.SupplierPhone,
+			SupplierEmail: invIng.SupplierEmail,
 			Status:       invIng.Status,
 		}
 		if err := database.DB.Create(&ingredient).Error; err != nil {
@@ -125,7 +129,11 @@ func (s *InventorySyncService) syncSingleIngredient(storeID uint, invIng Invento
 		ingredient.Category = invIng.Category
 		ingredient.Unit = invIng.Unit
 		ingredient.CurrentPrice = invIng.Price
+		ingredient.CurrentStock = invIng.CurrentStock
+		ingredient.StockUnit = invIng.StockUnit
 		ingredient.Supplier = invIng.Supplier
+		ingredient.SupplierPhone = invIng.SupplierPhone
+		ingredient.SupplierEmail = invIng.SupplierEmail
 		ingredient.Status = invIng.Status
 
 		if err := database.DB.Save(&ingredient).Error; err != nil {

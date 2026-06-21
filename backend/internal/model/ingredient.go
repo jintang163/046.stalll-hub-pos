@@ -14,7 +14,11 @@ type Ingredient struct {
 	Category      string          `gorm:"size:50;index" json:"category"`
 	Unit          string          `gorm:"size:20;not null" json:"unit"`
 	CurrentPrice  decimal.Decimal `gorm:"type:decimal(10,2);default:0" json:"current_price"`
+	CurrentStock  decimal.Decimal `gorm:"type:decimal(12,2);default:0" json:"current_stock"`
+	StockUnit     string          `gorm:"size:20" json:"stock_unit"`
 	Supplier      string          `gorm:"size:100" json:"supplier"`
+	SupplierPhone string          `gorm:"size:20" json:"supplier_phone"`
+	SupplierEmail string          `gorm:"size:100" json:"supplier_email"`
 	Status        int             `gorm:"default:1" json:"status"`
 	Remark        string          `gorm:"size:255" json:"remark"`
 	Store         Store           `gorm:"foreignKey:StoreID" json:"store,omitempty"`

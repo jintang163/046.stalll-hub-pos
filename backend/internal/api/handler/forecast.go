@@ -79,17 +79,12 @@ func (h *ForecastHandler) GeneratePurchaseOrder(c *gin.Context) {
 	}
 
 	var req struct {
-		SupplierName string `json:"supplier_name"`
-		ForecastDays int    `json:"forecast_days"`
-		HistoryDays  int    `json:"history_days"`
+		ForecastDays int `json:"forecast_days"`
+		HistoryDays  int `json:"history_days"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		middleware.Error(c, http.StatusBadRequest, "Invalid request: "+err.Error())
 		return
-	}
-
-	if req.SupplierName == "" {
-		req.SupplierName = "默认供应商"
 	}
 
 	forecast, err := h.forecastService.GetStoreForecast(uint(storeID), req.ForecastDays, req.HistoryDays)
@@ -106,8 +101,8 @@ func (h *ForecastHandler) GeneratePurchaseOrder(c *gin.Context) {
 		return
 	}
 
-	purchase, err := h.purchaseService.AutoGenerateFromForecast(
-		uint(storeID), forecast, suggestions, req.SupplierName,
+	purchaseOrders, err := h.purchaseService.AutoGenerateFromForecast(
+		uint(storeID), forecast, suggestions,
 	)
 	if err != nil {
 		log.Printf("[ForecastHandler] Generate purchase order failed: %v", err)
@@ -115,8 +110,15 @@ func (h *ForecastHandler) GeneratePurchaseOrder(c *gin.Context) {
 		return
 	}
 
-	result := h.purchaseService.ConvertToResponse(purchase)
-	middleware.Success(c, result)
+	var respList []dto.PurchaseOrderResponse
+	for _, po := range purchaseOrders {
+		respList = append(respList, h.purchaseService.ConvertToResponse(po))
+	}
+
+	middleware.Success(c, gin.H{
+		"count":   len(respList),
+		"records": respList,
+	})
 }
 
 func (h *ForecastHandler) GetPurchaseList(c *gin.Context) {
@@ -256,16 +258,23 @@ func (h *ForecastHandler) TriggerForecastTask(c *gin.Context) {
 			return
 		}
 
-		purchase, err := h.purchaseService.AutoGenerateFromForecast(
-			uint(storeID), forecast, suggestions, "系统自动生成",
+		purchaseOrders, err := h.purchaseService.AutoGenerateFromForecast(
+			uint(storeID), forecast, suggestions,
 		)
 		if err != nil {
 			log.Printf("[ForecastHandler] Auto generate purchase failed: %v", err)
 			return
 		}
 
-		log.Printf("[ForecastHandler] Forecast task completed for store %d, purchase order: %s",
-			storeID, purchase.PurchaseNo)
+		for _, purchase := range purchaseOrders {
+			if sendErr := h.purchaseService.SendToSupplier(purchase.ID); sendErr != nil {
+				log.Printf("[ForecastHandler] Failed to send purchase order %s to supplier %s: %v",
+					purchase.PurchaseNo, purchase.SupplierName, sendErr)
+				continue
+			}
+			log.Printf("[ForecastHandler] Forecast task completed for store %d, purchase order: %s (supplier: %s)",
+				storeID, purchase.PurchaseNo, purchase.SupplierName)
+		}
 	}()
 
 	middleware.Success(c, gin.H{

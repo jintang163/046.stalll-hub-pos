@@ -136,6 +136,8 @@ type StockingSuggestionItem struct {
 	UnitPrice      decimal.Decimal `json:"unit_price"`
 	EstimatedCost  decimal.Decimal `json:"estimated_cost"`
 	Supplier       string          `json:"supplier"`
+	SupplierPhone  string          `json:"supplier_phone"`
+	SupplierEmail  string          `json:"supplier_email"`
 }
 
 type StockingSuggestionResponse struct {

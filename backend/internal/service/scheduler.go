@@ -352,16 +352,23 @@ func (s *SchedulerService) runDailyForecast() {
 				return
 			}
 
-			purchase, err := s.purchaseService.AutoGenerateFromForecast(
-				store.ID, forecast, suggestions, "系统自动采购",
+			purchaseOrders, err := s.purchaseService.AutoGenerateFromForecast(
+				store.ID, forecast, suggestions,
 			)
 			if err != nil {
 				log.Printf("[Forecast] Store %d auto generate purchase order failed: %v", store.ID, err)
 				return
 			}
 
-			log.Printf("[Forecast] Store %s: generated purchase order %s, %d items, total: %s",
-				store.Name, purchase.PurchaseNo, purchase.ItemCount, purchase.TotalAmount.String())
+			for _, purchase := range purchaseOrders {
+				if sendErr := s.purchaseService.SendToSupplier(purchase.ID); sendErr != nil {
+					log.Printf("[Forecast] Store %d failed to send purchase order %s to supplier %s: %v",
+						store.ID, purchase.PurchaseNo, purchase.SupplierName, sendErr)
+					continue
+				}
+				log.Printf("[Forecast] Store %s: generated and sent purchase order %s (supplier: %s), %d items, total: %s",
+					store.Name, purchase.PurchaseNo, purchase.SupplierName, purchase.ItemCount, purchase.TotalAmount.String())
+			}
 		}(store)
 	}
 

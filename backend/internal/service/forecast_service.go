@@ -117,6 +117,8 @@ func (s *ForecastService) CalculateStockingSuggestion(
 				UnitPrice:      ing.UnitPrice,
 				EstimatedCost:  estimatedCost,
 				Supplier:       ing.Supplier,
+				SupplierPhone:  ing.SupplierPhone,
+				SupplierEmail:  ing.SupplierEmail,
 			})
 		}
 	}
@@ -142,6 +144,8 @@ type skuIngredient struct {
 	CurrentStock   decimal.Decimal
 	UnitPrice      decimal.Decimal
 	Supplier       string
+	SupplierPhone  string
+	SupplierEmail  string
 }
 
 func (s *ForecastService) getSKUIngredients(storeID, productID, skuID uint) []skuIngredient {
@@ -173,6 +177,8 @@ func (s *ForecastService) getSKUIngredients(storeID, productID, skuID uint) []sk
 			CurrentStock:   currentStock,
 			UnitPrice:      bom.Ingredient.CurrentPrice,
 			Supplier:       bom.Ingredient.Supplier,
+			SupplierPhone:  bom.Ingredient.SupplierPhone,
+			SupplierEmail:  bom.Ingredient.SupplierEmail,
 		})
 	}
 
@@ -181,10 +187,10 @@ func (s *ForecastService) getSKUIngredients(storeID, productID, skuID uint) []sk
 
 func (s *ForecastService) getIngredientStock(ingredientID uint) (decimal.Decimal, bool) {
 	var ingredient model.Ingredient
-	if err := database.DB.Select("current_price").First(&ingredient, ingredientID).Error; err != nil {
+	if err := database.DB.Select("current_stock").First(&ingredient, ingredientID).Error; err != nil {
 		return decimal.Zero, false
 	}
-	return decimal.Zero, true
+	return ingredient.CurrentStock, true
 }
 
 func mergeSuggestions(items []dto.StockingSuggestionItem) []dto.StockingSuggestionItem {

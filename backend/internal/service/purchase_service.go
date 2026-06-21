@@ -3,6 +3,8 @@ package service
 import (
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -10,6 +12,7 @@ import (
 	"stalll-hub-pos/backend/internal/dto"
 	"stalll-hub-pos/backend/internal/model"
 	"stalll-hub-pos/backend/pkg/database"
+	"stalll-hub-pos/backend/pkg/minio"
 )
 
 type PurchaseService struct {
@@ -248,7 +251,11 @@ func (s *PurchaseService) GenerateExcel(id uint) (string, error) {
 	}
 
 	fileName := fmt.Sprintf("purchase_%s_%d.xlsx", purchase.PurchaseNo, time.Now().Unix())
-	filePath := fmt.Sprintf("./tmp/%s", fileName)
+	dirPath := "./tmp"
+	if err := os.MkdirAll(dirPath, 0755); err != nil {
+		return "", fmt.Errorf("create tmp dir failed: %w", err)
+	}
+	filePath := filepath.Join(dirPath, fileName)
 
 	if err := f.SaveAs(filePath); err != nil {
 		return "", fmt.Errorf("save excel failed: %w", err)
@@ -274,13 +281,36 @@ func (s *PurchaseService) SendToSupplier(id uint) error {
 		return fmt.Errorf("generate excel failed: %w", err)
 	}
 
-	go s.dingTalk.SendPurchaseOrderNotification(purchase, excelPath)
+	fileURL, err := s.UploadExcelToMinIO(excelPath)
+	if err != nil {
+		log.Printf("[PurchaseService] Warning: failed to upload to MinIO, sending notification without link: %v", err)
+		fileURL = ""
+	}
+
+	go s.dingTalk.SendPurchaseOrderNotification(purchase, fileURL)
 
 	s.UpdateStatus(id, 1)
 
-	log.Printf("[PurchaseService] Purchase order %s sent to supplier %s", purchase.PurchaseNo, purchase.SupplierName)
+	log.Printf("[PurchaseService] Purchase order %s sent to supplier %s, file_url: %s", purchase.PurchaseNo, purchase.SupplierName, fileURL)
 
 	return nil
+}
+
+func (s *PurchaseService) UploadExcelToMinIO(excelPath string) (string, error) {
+	fileName := filepath.Base(excelPath)
+	objectName := fmt.Sprintf("purchase_orders/%s", fileName)
+
+	if err := minio.UploadFile(objectName, excelPath, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"); err != nil {
+		return "", fmt.Errorf("upload to minio failed: %w", err)
+	}
+
+	fileURL, err := minio.GetFileURL(objectName, 7*24*3600)
+	if err != nil {
+		return "", fmt.Errorf("get minio file url failed: %w", err)
+	}
+
+	log.Printf("[PurchaseService] Excel uploaded to MinIO: %s", objectName)
+	return fileURL, nil
 }
 
 func (s *PurchaseService) ConvertToResponse(purchase *model.PurchaseOrder) dto.PurchaseOrderResponse {
@@ -330,40 +360,77 @@ func (s *PurchaseService) AutoGenerateFromForecast(
 	storeID uint,
 	forecast *dto.StoreForecastResponse,
 	suggestions *dto.StockingSuggestionResponse,
-	supplierName string,
-) (*model.PurchaseOrder, error) {
-	var items []dto.PurchaseItemCreate
+) ([]*model.PurchaseOrder, error) {
+	defaultSupplier := "未指定供应商"
+
+	supplierGroups := make(map[string][]dto.StockingSuggestionItem)
+	supplierContact := make(map[string]struct{ Phone, Email string })
 
 	for _, sug := range suggestions.Suggestions {
 		if sug.SuggestedQty.LessThanOrEqual(decimal.Zero) {
 			continue
 		}
 
-		items = append(items, dto.PurchaseItemCreate{
-			IngredientID:   sug.IngredientID,
-			IngredientName: sug.IngredientName,
-			Category:       sug.Category,
-			Unit:           sug.Unit,
-			ForecastQty:    sug.ForecastUsage,
-			SafetyStockQty: sug.SafetyStock,
-			CurrentStock:   sug.CurrentStock,
-			PurchaseQty:    sug.SuggestedQty,
-			UnitPrice:      sug.UnitPrice,
-		})
+		supplierName := sug.Supplier
+		if supplierName == "" {
+			supplierName = defaultSupplier
+		}
+
+		supplierGroups[supplierName] = append(supplierGroups[supplierName], sug)
+		if _, ok := supplierContact[supplierName]; !ok {
+			supplierContact[supplierName] = struct{ Phone, Email string }{
+				Phone: sug.SupplierPhone,
+				Email: sug.SupplierEmail,
+			}
+		}
 	}
 
-	if len(items) == 0 {
+	var purchaseOrders []*model.PurchaseOrder
+
+	for supplierName, groupItems := range supplierGroups {
+		if len(groupItems) == 0 {
+			continue
+		}
+
+		var items []dto.PurchaseItemCreate
+		for _, sug := range groupItems {
+			items = append(items, dto.PurchaseItemCreate{
+				IngredientID:   sug.IngredientID,
+				IngredientName: sug.IngredientName,
+				Category:       sug.Category,
+				Unit:           sug.Unit,
+				ForecastQty:    sug.ForecastUsage,
+				SafetyStockQty: sug.SafetyStock,
+				CurrentStock:   sug.CurrentStock,
+				PurchaseQty:    sug.SuggestedQty,
+				UnitPrice:      sug.UnitPrice,
+			})
+		}
+
+		contact := supplierContact[supplierName]
+		req := &dto.PurchaseOrderCreateRequest{
+			StoreID:       storeID,
+			ForecastDate:  forecast.ForecastDate,
+			ForecastDays:  forecast.ForecastDays,
+			SupplierName:  supplierName,
+			SupplierPhone: contact.Phone,
+			SupplierEmail: contact.Email,
+			Items:         items,
+			Remark:        fmt.Sprintf("基于 %d 天销量预测自动生成（供应商：%s）", forecast.ForecastDays, supplierName),
+		}
+
+		purchase, err := s.GeneratePurchaseOrder(req)
+		if err != nil {
+			log.Printf("[PurchaseService] Failed to generate purchase order for supplier %s: %v", supplierName, err)
+			continue
+		}
+		purchaseOrders = append(purchaseOrders, purchase)
+	}
+
+	if len(purchaseOrders) == 0 {
 		return nil, fmt.Errorf("no items need to purchase")
 	}
 
-	req := &dto.PurchaseOrderCreateRequest{
-		StoreID:       storeID,
-		ForecastDate:  forecast.ForecastDate,
-		ForecastDays:  forecast.ForecastDays,
-		SupplierName:  supplierName,
-		Items:         items,
-		Remark:        fmt.Sprintf("基于 %d 天销量预测自动生成", forecast.ForecastDays),
-	}
-
-	return s.GeneratePurchaseOrder(req)
+	log.Printf("[PurchaseService] Auto-generated %d purchase orders from forecast (store %d)", len(purchaseOrders), storeID)
+	return purchaseOrders, nil
 }
