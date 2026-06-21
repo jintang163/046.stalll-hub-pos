@@ -286,9 +286,31 @@ func (h *WaiterHandler) publishOrderUpdate(orderID uint) {
 	}
 
 	msg := map[string]interface{}{
-		"type":     "order_update",
-		"order_id": orderID,
-		"order_no": order.OrderNo,
+		"type":      "order_update",
+		"order_id":  orderID,
+		"order_no":  order.OrderNo,
+		"store_id":  order.StoreID,
+		"table_no":  order.TableNo,
+		"item_count": len(order.Items),
+	}
+	msgData, _ := json.Marshal(msg)
+	_ = redis.Publish("waiter:order:"+strconv.FormatUint(uint64(order.StoreID), 10), string(msgData))
+}
+
+func PublishNewOrderNotification(order *model.Order) {
+	if order == nil || order.ID == 0 {
+		return
+	}
+
+	msg := map[string]interface{}{
+		"type":      "new_order",
+		"order_id":  order.ID,
+		"order_no":  order.OrderNo,
+		"store_id":  order.StoreID,
+		"table_no":  order.TableNo,
+		"item_count": len(order.Items),
+		"pay_amount": order.PayAmount.String(),
+		"created_at": order.CreatedAt,
 	}
 	msgData, _ := json.Marshal(msg)
 	_ = redis.Publish("waiter:order:"+strconv.FormatUint(uint64(order.StoreID), 10), string(msgData))

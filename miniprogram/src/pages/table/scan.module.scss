@@ -319,3 +319,110 @@
   font-size: $font-size-md;
   color: #999;
 }
+
+.callWaiterBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-sm;
+  padding: $spacing-md 0;
+  margin: $spacing-md 0;
+  background: #fff7e6;
+  border-radius: $radius-button;
+  border: 2rpx dashed #ff976a;
+
+  .callIcon {
+    font-size: $font-size-xl;
+  }
+
+  .callText {
+    font-size: $font-size-md;
+    color: #ff6b00;
+    font-weight: $font-weight-medium;
+  }
+}
+
+.callPopup {
+  padding: $spacing-xl $page-padding;
+  padding-bottom: calc(#{$spacing-xl} + env(safe-area-inset-bottom));
+  background: #fff;
+  border-radius: $radius-lg $radius-lg 0 0;
+}
+
+.callPopupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: $spacing-xl;
+
+  .callPopupTitle {
+    font-size: $font-size-lg;
+    font-weight: $font-weight-semibold;
+    color: #333;
+  }
+
+  .callPopupClose {
+    width: 48rpx;
+    height: 48rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #999;
+    font-size: $font-size-lg;
+  }
+}
+
+.callTypeGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: $spacing-md;
+  margin-bottom: $spacing-xl;
+}
+
+.callTypeItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-lg $spacing-xs;
+  background: #f5f7fa;
+  border-radius: $radius-md;
+  border: 2rpx solid transparent;
+  transition: all $transition-fast;
+
+  &.callTypeActive {
+    background: #ecf5ff;
+    border-color: #667eea;
+  }
+
+  .callTypeIcon {
+    font-size: 40rpx;
+    margin-bottom: $spacing-xs;
+  }
+
+  .callTypeLabel {
+    font-size: $font-size-sm;
+    color: #666;
+
+    .callTypeActive & {
+      color: #667eea;
+      font-weight: $font-weight-medium;
+    }
+  }
+}
+
+.callContentInput {
+  margin-bottom: $spacing-xl;
+
+  :global(.nut-input) {
+    background: #f5f7fa;
+    border-radius: $radius-md;
+  }
+}
+
+.callConfirmBtn {
+  height: $button-height-lg;
+  border-radius: $radius-button;
+  font-size: $font-size-lg;
+  font-weight: $font-weight-medium;
+}

@@ -31,6 +31,7 @@ func main() {
 		&model.Store{},
 		&model.Printer{},
 		&model.StoreUser{},
+		&model.WaiterCall{},
 		&model.Category{},
 		&model.Product{},
 		&model.ProductSKU{},

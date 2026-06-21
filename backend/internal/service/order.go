@@ -16,7 +16,9 @@ import (
 	"stalll-hub-pos/backend/internal/dto"
 	"stalll-hub-pos/backend/internal/model"
 	"stalll-hub-pos/backend/internal/repository"
+	"stalll-hub-pos/backend/pkg/database"
 	"stalll-hub-pos/backend/pkg/nsq"
+	"stalll-hub-pos/backend/pkg/redis"
 )
 
 type OrderService struct {
@@ -224,6 +226,28 @@ func (s *OrderService) Create(req *dto.CreateOrderRequest) (*dto.CreateOrderResp
 	if err != nil {
 		return nil, fmt.Errorf("create order failed: %w", err)
 	}
+
+	if order.OrderType == "dine-in" && order.TableNo != "" {
+		database.DB.Model(&model.Table{}).
+			Where("store_id = ? AND table_no = ?", order.StoreID, order.TableNo).
+			Updates(map[string]interface{}{
+				"current_order_id": order.ID,
+				"status":           1,
+			})
+	}
+
+	newOrderMsg := map[string]interface{}{
+		"type":       "new_order",
+		"order_id":   order.ID,
+		"order_no":   order.OrderNo,
+		"store_id":   order.StoreID,
+		"table_no":   order.TableNo,
+		"item_count": len(order.Items),
+		"pay_amount": order.PayAmount.String(),
+		"created_at": order.CreatedAt,
+	}
+	newOrderMsgData, _ := json.Marshal(newOrderMsg)
+	_ = redis.Publish("waiter:order:"+fmt.Sprintf("%d", order.StoreID), string(newOrderMsgData))
 
 	if s.nsqProducer != nil {
 		orderData, _ := json.Marshal(map[string]interface{}{

@@ -1,8 +1,9 @@
 import React, { useState, useCallback } from 'react'
 import { View, Text, Image } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
-import { Button, Loading, Input } from '@nutui/nutui-react-taro'
+import { Button, Loading, Input, Popup } from '@nutui/nutui-react-taro'
 import { tableApi } from '../../services/table'
+import { waiterApi } from '../../services/waiter'
 import type { TableInfo, TableItem } from '../../services/table'
 import { useAppStore } from '../../store/app'
 import { useCartStore } from '../../store/cart'
@@ -17,6 +18,10 @@ const TableScan: React.FC = () => {
   const [manualTableNo, setManualTableNo] = useState('')
   const [selectedTableId, setSelectedTableId] = useState<number | null>(null)
   const [errorMessage, setErrorMessage] = useState('')
+  const [showCallPopup, setShowCallPopup] = useState(false)
+  const [callType, setCallType] = useState('service')
+  const [callContent, setCallContent] = useState('')
+  const [calling, setCalling] = useState(false)
 
   const currentStore = useAppStore(state => state.currentStore)
   const setTableNo = useCartStore(state => state.setTableNo)
@@ -165,6 +170,40 @@ const TableScan: React.FC = () => {
     setManualTableNo('')
   }
 
+  const handleOpenCallPopup = () => {
+    setCallType('service')
+    setCallContent('')
+    setShowCallPopup(true)
+  }
+
+  const handleCallWaiter = async () => {
+    if (!tableInfo || !currentStore) return
+
+    setCalling(true)
+    try {
+      await waiterApi.callWaiter({
+        store_id: tableInfo.storeId || currentStore.id,
+        table_id: tableInfo.id,
+        table_no: tableInfo.tableNo,
+        call_type: callType,
+        content: callContent
+      })
+      Taro.showToast({ title: '呼叫已发送，请稍候', icon: 'success' })
+      setShowCallPopup(false)
+    } catch (err) {
+      console.error('Call waiter failed:', err)
+    } finally {
+      setCalling(false)
+    }
+  }
+
+  const callTypeOptions = [
+    { value: 'service', label: '呼叫服务', icon: '🔔' },
+    { value: 'water', label: '需要加水', icon: '💧' },
+    { value: 'pay', label: '需要结账', icon: '💰' },
+    { value: 'other', label: '其他需求', icon: '💬' }
+  ]
+
   useDidShow(() => {
     if (pageStatus === 'idle') {
       handleScanCode()
@@ -296,6 +335,12 @@ const TableScan: React.FC = () => {
               {tableInfo.status === 2 && (
                   <Text className={styles.loadingText}>该桌位已停用，请选择其他桌位</Text>
                 )}
+
+              <View className={styles.callWaiterBtn} onClick={handleOpenCallPopup}>
+                <Text className={styles.callIcon}>🔔</Text>
+                <Text className={styles.callText}>呼叫服务员</Text>
+              </View>
+
               <Button
                 className={styles.secondaryBtn}
                 onClick={handleRetry}
@@ -381,6 +426,55 @@ const TableScan: React.FC = () => {
       <View className={styles.footer}>
         <Text className={styles.footerText}>扫码遇到问题？请联系服务员</Text>
       </View>
+
+      <Popup
+        visible={showCallPopup}
+        position='bottom'
+        onClose={() => setShowCallPopup(false)}
+        round
+      >
+        <View className={styles.callPopup}>
+          <View className={styles.callPopupHeader}>
+            <Text className={styles.callPopupTitle}>呼叫服务员</Text>
+            <View className={styles.callPopupClose} onClick={() => setShowCallPopup(false)}>
+              <Text>✕</Text>
+            </View>
+          </View>
+
+          <View className={styles.callTypeGrid}>
+            {callTypeOptions.map(option => (
+              <View
+                key={option.value}
+                className={`${styles.callTypeItem} ${callType === option.value ? styles.callTypeActive : ''}`}
+                onClick={() => setCallType(option.value)}
+              >
+                <Text className={styles.callTypeIcon}>{option.icon}</Text>
+                <Text className={styles.callTypeLabel}>{option.label}</Text>
+              </View>
+            ))}
+          </View>
+
+          <View className={styles.callContentInput}>
+            <Input
+              placeholder='补充说明（选填）'
+              value={callContent}
+              onChange={setCallContent}
+              maxLength={200}
+            />
+          </View>
+
+          <Button
+            className={styles.callConfirmBtn}
+            type='primary'
+            block
+            loading={calling}
+            disabled={calling}
+            onClick={handleCallWaiter}
+          >
+            {calling ? '呼叫中...' : '确认呼叫'}
+          </Button>
+        </View>
+      </Popup>
     </View>
   )
 }
