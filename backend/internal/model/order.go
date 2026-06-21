@@ -37,11 +37,17 @@ type Order struct {
 	DeliveryLng     float64         `json:"delivery_lng"`
 	DeliveryLat     float64         `json:"delivery_lat"`
 	DeliveryFee     decimal.Decimal `gorm:"type:decimal(10,2);default:0" json:"delivery_fee"`
+	IsReservation   bool            `gorm:"default:false;index" json:"is_reservation"`
+	ReservationTime *time.Time      `json:"reservation_time"`
+	TimeSlotID      uint            `json:"time_slot_id"`
+	ReminderSent    bool            `gorm:"default:false" json:"reminder_sent"`
+	StockReserved   bool            `gorm:"default:false" json:"stock_reserved"`
 	Store           Store           `gorm:"foreignKey:StoreID" json:"store,omitempty"`
 	Member          *Member         `gorm:"foreignKey:MemberID" json:"member,omitempty"`
 	Items           []OrderItem     `gorm:"foreignKey:OrderID" json:"items,omitempty"`
 	Payments        []OrderPayment  `gorm:"foreignKey:OrderID" json:"payments,omitempty"`
 	Refunds         []OrderRefund   `gorm:"foreignKey:OrderID" json:"refunds,omitempty"`
+	TimeSlotPricing *TimeSlotPricing `gorm:"foreignKey:TimeSlotID" json:"time_slot_pricing,omitempty"`
 }
 
 type OrderItem struct {

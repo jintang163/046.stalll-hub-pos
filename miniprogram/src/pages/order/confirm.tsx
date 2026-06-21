@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { View, Text, Image, ScrollView, Input } from '@tarojs/components'
 import Taro from '@tarojs/taro'
-import { Loading, Dialog, Cell, Button } from '@nutui/nutui-react-taro'
+import { Loading, Dialog, Cell, Button, Picker } from '@nutui/nutui-react-taro'
 import { useCartStore } from '../../store/cart'
 import { useAppStore } from '../../store/app'
 import { getAvailableCoupons, MemberCoupon, calculateBestCombination, BestPromotionResponse } from '../../services/coupon'
@@ -10,6 +10,7 @@ import type { OrderCreateDTO, OrderItem } from '../../services/order'
 import { orderTypeMap, planRoute } from '../../services/delivery'
 import type { OrderType } from '../../services/delivery'
 import { isLogin, loginByCode } from '../../services/auth'
+import { getActiveTimeSlots, TimeSlotPricing } from '../../services/timeSlotPricing'
 import styles from './confirm.module.scss'
 
 const OrderConfirm: React.FC = () => {
@@ -39,9 +40,16 @@ const OrderConfirm: React.FC = () => {
   const [deliveryPhone, setDeliveryPhone] = useState('')
   const [deliveryFee, setDeliveryFee] = useState(0)
 
+  const [isReservation, setIsReservation] = useState(false)
+  const [reservationTime, setReservationTime] = useState('')
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState<TimeSlotPricing | null>(null)
+  const [activeTimeSlots, setActiveTimeSlots] = useState<TimeSlotPricing[]>([])
+  const [showTimeSlotDialog, setShowTimeSlotDialog] = useState(false)
+  const [timeSlotDiscount, setTimeSlotDiscount] = useState(0)
+
   const actualTotal = bestPromo
-    ? bestPromo.final_amount + deliveryFee
-    : Math.max(0, total - couponDiscount) + deliveryFee
+    ? Math.max(0, bestPromo.final_amount - timeSlotDiscount) + deliveryFee
+    : Math.max(0, total - couponDiscount - timeSlotDiscount) + deliveryFee
 
   const productIds = Array.from(new Set(items.map(item => item.product_id)))
 
@@ -55,6 +63,102 @@ const OrderConfirm: React.FC = () => {
       estimateDeliveryFee()
     }
   }, [orderType, deliveryAddress])
+
+  useEffect(() => {
+    if (currentStore) {
+      loadActiveTimeSlots()
+    }
+  }, [currentStore])
+
+  useEffect(() => {
+    if (isReservation && reservationTime && activeTimeSlots.length > 0) {
+      matchTimeSlot()
+    } else {
+      setSelectedTimeSlot(null)
+      setTimeSlotDiscount(0)
+    }
+  }, [isReservation, reservationTime, activeTimeSlots, total])
+
+  const loadActiveTimeSlots = async () => {
+    if (!currentStore) return
+    try {
+      const slots = await getActiveTimeSlots(currentStore.id)
+      setActiveTimeSlots(slots)
+    } catch {}
+  }
+
+  const matchTimeSlot = () => {
+    if (!reservationTime || activeTimeSlots.length === 0) return
+
+    const reserveDate = new Date(reservationTime)
+    const reserveTimeStr = `${String(reserveDate.getHours()).padStart(2, '0')}:${String(reserveDate.getMinutes()).padStart(2, '0')}`
+    const reserveDay = reserveDate.getDay()
+
+    const applicableSlots = activeTimeSlots.filter(slot => {
+      if (slot.applicable_days.length > 0 && !slot.applicable_days.includes(reserveDay)) {
+        return false
+      }
+      return reserveTimeStr >= slot.start_time && reserveTimeStr <= slot.end_time
+    })
+
+    if (applicableSlots.length > 0) {
+      applicableSlots.sort((a, b) => b.priority - a.priority)
+      const bestSlot = applicableSlots[0]
+      setSelectedTimeSlot(bestSlot)
+
+      let discount = 0
+      if (bestSlot.discount_type === 'fixed') {
+        discount = Math.min(bestSlot.discount_value, total)
+      } else if (bestSlot.discount_type === 'percentage') {
+        discount = Math.min((total * bestSlot.discount_value) / 100, bestSlot.max_discount || Infinity)
+      }
+
+      if (total >= bestSlot.min_amount) {
+        setTimeSlotDiscount(discount)
+      } else {
+        setTimeSlotDiscount(0)
+      }
+    } else {
+      setSelectedTimeSlot(null)
+      setTimeSlotDiscount(0)
+    }
+  }
+
+  const handleReservationTypeChange = (isReserve: boolean) => {
+    setIsReservation(isReserve)
+    if (!isReserve) {
+      setReservationTime('')
+      setSelectedTimeSlot(null)
+      setTimeSlotDiscount(0)
+    }
+  }
+
+  const generateDateRange = () => {
+    const dates = []
+    const today = new Date()
+    for (let i = 0; i < 14; i++) {
+      const date = new Date(today)
+      date.setDate(today.getDate() + i)
+      dates.push({
+        value: date.toISOString().split('T')[0],
+        label: `${date.getMonth() + 1}月${date.getDate()}日 ${['周日', '周一', '周二', '周三', '周四', '周五', '周六'][date.getDay()]}`
+      })
+    }
+    return dates
+  }
+
+  const generateTimeRange = () => {
+    const times = []
+    for (let h = 9; h <= 21; h++) {
+      for (let m = 0; m < 60; m += 30) {
+        const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+        times.push({ value: timeStr, label: timeStr })
+      }
+    }
+    return times
+  }
+
+  const dateColumns = [generateDateRange(), generateTimeRange()]
 
   const estimateDeliveryFee = async () => {
     try {
@@ -137,6 +241,11 @@ const OrderConfirm: React.FC = () => {
       }
     }
 
+    if (isReservation && !reservationTime) {
+      Taro.showToast({ title: '请选择预约时间', icon: 'none' })
+      return
+    }
+
     if (!isLogin()) {
       await handleWxLogin()
       if (!isLogin()) return
@@ -171,6 +280,9 @@ const OrderConfirm: React.FC = () => {
         delivery_contact: orderType === 'delivery' ? deliveryContact : undefined,
         delivery_phone: orderType === 'delivery' ? deliveryPhone : undefined,
         delivery_fee: orderType === 'delivery' ? deliveryFee : undefined,
+        is_reservation: isReservation,
+        reservation_time: isReservation ? reservationTime : undefined,
+        time_slot_id: selectedTimeSlot?.id,
       }
 
       const order = await createOrder(orderData)
@@ -261,6 +373,50 @@ const OrderConfirm: React.FC = () => {
               </View>
             ))}
           </View>
+        </View>
+
+        <View className={styles.section}>
+          <View className={styles.sectionHeader}>
+            <Text className={styles.sectionIcon}>⏰</Text>
+            <Text className={styles.sectionTitle}>用餐时间</Text>
+          </View>
+          <View className={styles.orderTypeRow}>
+            <View
+              className={`${styles.orderTypeItem} ${!isReservation ? styles.orderTypeActive : ''}`}
+              onClick={() => handleReservationTypeChange(false)}
+            >
+              <Text className={styles.orderTypeIcon}>🍽️</Text>
+              <Text className={styles.orderTypeLabel}>立即用餐</Text>
+            </View>
+            <View
+              className={`${styles.orderTypeItem} ${isReservation ? styles.orderTypeActive : ''}`}
+              onClick={() => handleReservationTypeChange(true)}
+            >
+              <Text className={styles.orderTypeIcon}>📅</Text>
+              <Text className={styles.orderTypeLabel}>预约用餐</Text>
+            </View>
+          </View>
+
+          {isReservation && (
+            <View className={styles.reservationSection}>
+              <Cell
+                title='预约时间'
+                description={reservationTime || '请选择预约时间'}
+                extra='▶'
+                onClick={() => setShowTimeSlotDialog(true)}
+              />
+              {selectedTimeSlot && timeSlotDiscount > 0 && (
+                <View className={styles.timeSlotPromo}>
+                  <Text className={styles.timeSlotTag}>{selectedTimeSlot.name}</Text>
+                  <Text className={styles.timeSlotDiscount}>
+                    {selectedTimeSlot.discount_type === 'fixed'
+                      ? `立减 ¥${selectedTimeSlot.discount_value}`
+                      : `${selectedTimeSlot.discount_value}折优惠`}
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
         </View>
 
         {orderType === 'dine_in' && currentStore && (
@@ -354,7 +510,12 @@ const OrderConfirm: React.FC = () => {
                 src={item.product_image || 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=food&image_size=square'}
               />
               <View className={styles.itemInfo}>
-                <Text className={styles.itemName} numberOfLines={1}>{item.product_name}</Text>
+                <View className={styles.itemNameRow}>
+                  <Text className={styles.itemName} numberOfLines={1}>{item.product_name}</Text>
+                  {selectedTimeSlot && timeSlotDiscount > 0 && (
+                    <Text className={styles.itemTimeSlotTag}>{selectedTimeSlot.name}</Text>
+                  )}
+                </View>
                 <Text className={styles.itemSpec}>
                   {item.sku_name}
                   {item.attribute_names.map((name, idx) => (
@@ -435,6 +596,12 @@ const OrderConfirm: React.FC = () => {
           {!bestPromo && couponDiscount > 0 && (
             <Cell title='优惠券抵扣' extra={`-¥${couponDiscount.toFixed(2)}`} />
           )}
+          {timeSlotDiscount > 0 && (
+            <Cell
+              title={`时段优惠${selectedTimeSlot ? `(${selectedTimeSlot.name})` : ''}`}
+              extra={`-¥${timeSlotDiscount.toFixed(2)}`}
+            />
+          )}
           <Cell title='实付金额' extra={`¥${Number(actualTotal).toFixed(2)}`} />
         </View>
       </ScrollView>
@@ -510,6 +677,44 @@ const OrderConfirm: React.FC = () => {
           Taro.redirectTo({ url: '/pages/order/list' })
         }}
       />
+
+      <Dialog
+        visible={showTimeSlotDialog}
+        title='选择预约时间'
+        footer={null}
+        onClose={() => setShowTimeSlotDialog(false)}
+      >
+        <View className={styles.timePickerContainer}>
+          <Picker
+            columns={dateColumns}
+            onConfirm={(values) => {
+              const [date, time] = values
+              const fullTime = `${date} ${time}:00`
+              setReservationTime(fullTime)
+              setShowTimeSlotDialog(false)
+            }}
+            onCancel={() => setShowTimeSlotDialog(false)}
+          />
+        </View>
+        {activeTimeSlots.length > 0 && (
+          <View className={styles.availableSlots}>
+            <Text className={styles.availableSlotsTitle}>可用时段优惠</Text>
+            <View className={styles.slotList}>
+              {activeTimeSlots.map(slot => (
+                <View key={slot.id} className={styles.slotItem}>
+                  <Text className={styles.slotName}>{slot.name}</Text>
+                  <Text className={styles.slotTime}>{slot.start_time}-{slot.end_time}</Text>
+                  <Text className={styles.slotDiscount}>
+                    {slot.discount_type === 'fixed'
+                      ? `立减¥${slot.discount_value}`
+                      : `${slot.discount_value}折`}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+      </Dialog>
     </View>
   )
 }

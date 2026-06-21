@@ -42,6 +42,7 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 	forecastHandler := handler.NewForecastHandler()
 	waiterHandler := handler.NewWaiterHandler()
 	facePaymentHandler := handler.NewFacePaymentHandler()
+	timeSlotPricingHandler := handler.NewTimeSlotPricingHandler()
 
 	orderHandler := handler.NewOrderHandler(nil)
 
@@ -553,6 +554,23 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 		voice.Use(middleware.JWTAuth())
 		{
 			voice.POST("/broadcast", facePaymentHandler.VoiceBroadcast)
+		}
+
+		timeSlotPricing := api.Group("/time-slot-pricing")
+		timeSlotPricing.Use(middleware.JWTAuth())
+		{
+			timeSlotPricing.POST("", timeSlotPricingHandler.Create)
+			timeSlotPricing.GET("", timeSlotPricingHandler.List)
+			timeSlotPricing.GET("/:id", timeSlotPricingHandler.Get)
+			timeSlotPricing.PUT("/:id", timeSlotPricingHandler.Update)
+			timeSlotPricing.DELETE("/:id", timeSlotPricingHandler.Delete)
+		}
+
+		miniTimeSlotPricing := api.Group("/mini/time-slot-pricing")
+		miniTimeSlotPricing.Use(middleware.MemberAuth())
+		{
+			miniTimeSlotPricing.GET("/active", timeSlotPricingHandler.GetActiveTimeSlots)
+			miniTimeSlotPricing.POST("/calculate", timeSlotPricingHandler.CalculatePrice)
 		}
 	}
 

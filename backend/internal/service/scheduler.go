@@ -14,6 +14,7 @@ type SchedulerService struct {
 	dingTalk         *DingTalkService
 	forecastService  *ForecastService
 	purchaseService  *PurchaseService
+	timeSlotService  *TimeSlotPricingService
 }
 
 func NewSchedulerService() *SchedulerService {
@@ -24,6 +25,7 @@ func NewSchedulerService() *SchedulerService {
 		dingTalk:         NewDingTalkService(),
 		forecastService:  NewForecastService(),
 		purchaseService:  NewPurchaseService(),
+		timeSlotService:  NewTimeSlotPricingService(),
 	}
 }
 
@@ -35,6 +37,8 @@ func (s *SchedulerService) StartAllSchedulers() {
 	go s.runStallDeviceCheckScheduler()
 	go s.runStallDailyReportScheduler()
 	go s.runStockWarningScheduler()
+	go s.runStockReservationCleaner()
+	go s.runReservationReminder()
 	log.Println("[Scheduler] All schedulers started")
 }
 
@@ -373,4 +377,42 @@ func (s *SchedulerService) runDailyForecast() {
 	}
 
 	log.Println("[Forecast] Daily forecast tasks submitted")
+}
+
+func (s *SchedulerService) runStockReservationCleaner() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	s.checkStockReservations()
+
+	for range ticker.C {
+		s.checkStockReservations()
+	}
+}
+
+func (s *SchedulerService) runReservationReminder() {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		s.checkReservationReminders()
+	}
+}
+
+func (s *SchedulerService) checkStockReservations() {
+	count, err := s.timeSlotService.CleanExpiredReservations()
+	if err != nil {
+		log.Printf("[Scheduler] Failed to clean expired stock reservations: %v", err)
+	} else if count > 0 {
+		log.Printf("[Scheduler] Cleaned %d expired stock reservations", count)
+	}
+}
+
+func (s *SchedulerService) checkReservationReminders() {
+	sentCount, err := s.timeSlotService.ProcessPendingReminders()
+	if err != nil {
+		log.Printf("[Scheduler] Failed to process reservation reminders: %v", err)
+	} else if sentCount > 0 {
+		log.Printf("[Scheduler] Sent %d reservation reminders", sentCount)
+	}
 }

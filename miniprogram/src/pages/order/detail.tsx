@@ -18,6 +18,13 @@ const statusMap: Record<number, { text: string; color: string }> = {
   6: { text: '已退款', color: '#909399' }
 }
 
+const reservationStatusMap: Record<number, { text: string; color: string }> = {
+  0: { text: '待确认', color: '#e6a23c' },
+  1: { text: '已确认', color: '#67c23a' },
+  2: { text: '已取消', color: '#909399' },
+  3: { text: '已完成', color: '#67c23a' }
+}
+
 const OrderDetail: React.FC = () => {
   const router = useRouter()
   const orderNo = router.params.order_no as string
@@ -128,6 +135,9 @@ const OrderDetail: React.FC = () => {
 
   const statusInfo = statusMap[order.status] || { text: '未知状态', color: '#999' }
   const orderTypeLabel = (orderTypeMap as any)[order.order_type || 'dine_in']?.label || '堂食'
+  const reservationStatusInfo = order.reservation_status !== undefined
+    ? reservationStatusMap[order.reservation_status]
+    : null
 
   return (
     <View className={styles.container}>
@@ -139,11 +149,21 @@ const OrderDetail: React.FC = () => {
             </Text>
           </View>
           <View className={styles.statusInfo}>
-            <Text className={styles.statusText} style={{ color: statusInfo.color }}>
-              {statusInfo.text}
-            </Text>
+            <View className={styles.statusTags}>
+              <Text className={styles.statusText} style={{ color: statusInfo.color }}>
+                {statusInfo.text}
+              </Text>
+              {order.is_reservation && reservationStatusInfo && (
+                <Text className={styles.reservationStatusTag} style={{ backgroundColor: reservationStatusInfo.color }}>
+                  预约{reservationStatusInfo.text}
+                </Text>
+              )}
+            </View>
             {order.order_type && (
               <Text className={styles.orderTypeTag}>{orderTypeLabel}</Text>
+            )}
+            {order.is_reservation && order.reservation_time && (
+              <Text className={styles.statusDesc}>预约时间：{order.reservation_time}</Text>
             )}
             {order.status === 2 && (
               <Text className={styles.statusDesc}>商家正在为您准备餐品，请稍候</Text>
@@ -196,6 +216,31 @@ const OrderDetail: React.FC = () => {
             <Cell title='联系人' description={`${(order as any).delivery_contact} ${(order as any).delivery_phone || ''}`} />
           )}
         </View>
+
+        {order.is_reservation && (
+          <View className={styles.section}>
+            <View className={styles.sectionHeader}>
+              <Text className={styles.sectionIcon}>📅</Text>
+              <Text className={styles.sectionTitle}>预约信息</Text>
+            </View>
+            <Cell title='是否预约' description={order.is_reservation ? '是' : '否'} />
+            {order.reservation_time && (
+              <Cell title='预约时间' description={order.reservation_time} />
+            )}
+            {order.time_slot_name && (
+              <Cell title='时段名称' description={order.time_slot_name} />
+            )}
+            {order.time_slot_discount && (
+              <Cell title='时段优惠' description={order.time_slot_discount} />
+            )}
+            {order.reservation_status !== undefined && reservationStatusInfo && (
+              <Cell
+                title='预约状态'
+                extra={<Text style={{ color: reservationStatusInfo.color }}>{reservationStatusInfo.text}</Text>}
+              />
+            )}
+          </View>
+        )}
 
         <View className={styles.section}>
           <View className={styles.sectionHeader}>

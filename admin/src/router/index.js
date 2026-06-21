@@ -62,6 +62,12 @@ const routes = [
         component: () => import('@/views/promotions/index.vue'),
         meta: { title: '营销活动', icon: 'Present' }
       },
+      {
+        path: 'time-slot-pricing',
+        name: 'TimeSlotPricing',
+        component: () => import('@/views/time-slot-pricing/index.vue'),
+        meta: { title: '时段定价', icon: 'Clock' }
+      },
       // {
       //   path: 'inventory',
       //   name: 'Inventory',

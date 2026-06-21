@@ -1,4 +1,5 @@
 import request from './request'
+import type { TimeSlotPricing } from './timeSlotPricing'
 
 export interface OrderItem {
   id?: number
@@ -33,6 +34,14 @@ export interface Order {
   updated_at?: string
   paid_at?: string
   items: OrderItem[]
+  order_type?: 'dine_in' | 'takeout' | 'delivery' | 'pickup'
+  is_reservation?: boolean
+  reservation_time?: string
+  time_slot_id?: number
+  time_slot_pricing?: TimeSlotPricing
+  time_slot_name?: string
+  time_slot_discount?: string
+  reservation_status?: number
 }
 
 export interface OrderCreateDTO {
@@ -52,6 +61,9 @@ export interface OrderCreateDTO {
   delivery_lng?: number
   delivery_lat?: number
   delivery_fee?: number
+  is_reservation?: boolean
+  reservation_time?: string
+  time_slot_id?: number
 }
 
 export const createOrder = (data: OrderCreateDTO) => {

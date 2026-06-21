@@ -9,19 +9,24 @@ import (
 	"github.com/shopspring/decimal"
 	"stalll-hub-pos/backend/internal/dto"
 	"stalll-hub-pos/backend/internal/middleware"
+	"stalll-hub-pos/backend/internal/model"
 	"stalll-hub-pos/backend/internal/service"
 	"stalll-hub-pos/backend/pkg/response"
 )
 
 type OrderHandler struct {
-	orderService *service.OrderService
+	orderService           *service.OrderService
+	timeSlotPricingService *service.TimeSlotPricingService
 }
 
 func NewOrderHandler(orderService *service.OrderService) *OrderHandler {
 	if orderService == nil {
 		orderService = service.NewOrderService()
 	}
-	return &OrderHandler{orderService: orderService}
+	return &OrderHandler{
+		orderService:           orderService,
+		timeSlotPricingService: service.NewTimeSlotPricingService(),
+	}
 }
 
 func (h *OrderHandler) Create(c *gin.Context) {
@@ -31,10 +36,45 @@ func (h *OrderHandler) Create(c *gin.Context) {
 		return
 	}
 
+	if req.IsReservation && req.ReservationTime != nil {
+		checkTime := *req.ReservationTime
+		_, updatedItems, err := h.timeSlotPricingService.CalculateOrderPrices(req.StoreID, req.Items, checkTime)
+		if err == nil {
+			req.Items = updatedItems
+		}
+	}
+
 	resp, err := h.orderService.Create(&req)
 	if err != nil {
 		middleware.Error(c, http.StatusInternalServerError, err.Error())
 		return
+	}
+
+	if req.IsReservation {
+		order, err := h.orderService.GetByID(resp.OrderID)
+		if err == nil {
+			orderModel := &model.Order{
+				BaseModel: model.BaseModel{ID: resp.OrderID},
+				StoreID:   order.StoreID,
+				IsReservation: req.IsReservation,
+				ReservationTime: req.ReservationTime,
+				Items:     make([]model.OrderItem, 0),
+			}
+			for _, item := range order.Items {
+				orderModel.Items = append(orderModel.Items, model.OrderItem{
+					SKUID:     item.SKUID,
+					ProductID: item.ProductID,
+					Quantity:  item.Quantity,
+				})
+			}
+
+			_ = h.timeSlotPricingService.ReserveStock(orderModel)
+
+			if req.ReservationTime != nil {
+				orderModel.ReservationTime = req.ReservationTime
+				_ = h.timeSlotPricingService.CreateReminder(orderModel)
+			}
+		}
 	}
 
 	middleware.Success(c, resp)

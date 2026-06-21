@@ -31,6 +31,7 @@ type OrderService struct {
 	pointsEngine     *PointsEngineService
 	nsqProducer      *nsq.Producer
 	stallRepo        *repository.StallRepository
+	timeSlotService  *TimeSlotPricingService
 	cfg              *config.Config
 }
 
@@ -45,6 +46,7 @@ func NewOrderService() *OrderService {
 		pointsEngine:     NewPointsEngineService(),
 		nsqProducer:      nsq.Producer,
 		stallRepo:        repository.NewStallRepository(nil),
+		timeSlotService:  NewTimeSlotPricingService(),
 		cfg:              config.AppConfig,
 	}
 }
@@ -75,10 +77,23 @@ func (s *OrderService) attributeValuesToString(attrs []dto.AttributeValue) strin
 func (s *OrderService) Create(req *dto.CreateOrderRequest) (*dto.CreateOrderResponse, error) {
 	orderNo := s.generateOrderNo()
 
+	items := req.Items
+	if req.IsReservation || req.TimeSlotID > 0 {
+		checkTime := time.Now()
+		if req.IsReservation && req.ReservationTime != nil {
+			checkTime = *req.ReservationTime
+		}
+		_, updatedItems, err := s.timeSlotService.CalculateOrderPrices(req.StoreID, items, checkTime)
+		if err != nil {
+			return nil, fmt.Errorf("calculate time slot prices failed: %w", err)
+		}
+		items = updatedItems
+	}
+
 	totalAmount := decimal.Zero
 	var orderItems []model.OrderItem
 
-	for _, item := range req.Items {
+	for _, item := range items {
 		sku, err := s.productRepo.GetSKUByID(item.SKUID)
 		if err != nil {
 			return nil, fmt.Errorf("SKU not found: %w", err)
@@ -222,12 +237,37 @@ func (s *OrderService) Create(req *dto.CreateOrderRequest) (*dto.CreateOrderResp
 		DeliveryLng:     req.DeliveryLng,
 		DeliveryLat:     req.DeliveryLat,
 		DeliveryFee:     req.DeliveryFee,
+		IsReservation:   req.IsReservation,
+		ReservationTime: req.ReservationTime,
+		TimeSlotID:      req.TimeSlotID,
 		Items:           orderItems,
 	}
 
 	err := s.orderRepo.CreateWithItems(order)
 	if err != nil {
 		return nil, fmt.Errorf("create order failed: %w", err)
+	}
+
+	if req.IsReservation {
+		rollback := false
+		defer func() {
+			if rollback {
+				if order.StockReserved {
+					_ = s.timeSlotService.ReleaseStock(order.ID)
+				}
+			}
+		}()
+
+		if err := s.timeSlotService.ReserveStock(order); err != nil {
+			rollback = true
+			return nil, fmt.Errorf("reserve stock failed: %w", err)
+		}
+		order.StockReserved = true
+
+		if err := s.timeSlotService.CreateReminder(order); err != nil {
+			rollback = true
+			return nil, fmt.Errorf("create reminder failed: %w", err)
+		}
 	}
 
 	if order.OrderType == "dine-in" && order.TableNo != "" {
@@ -365,6 +405,13 @@ func (s *OrderService) Cancel(id uint, reason string) error {
 
 	if order.OrderStatus >= 3 {
 		return errors.New("order already in production, cannot cancel")
+	}
+
+	if order.IsReservation && order.StockReserved {
+		if err := s.timeSlotService.ReleaseStock(order.ID); err != nil {
+			return fmt.Errorf("release stock failed: %w", err)
+		}
+		order.StockReserved = false
 	}
 
 	return s.orderRepo.Cancel(id, reason)

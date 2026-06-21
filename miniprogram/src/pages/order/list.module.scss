@@ -27,6 +27,11 @@
   margin-bottom: 20rpx;
 }
 
+.orderTypeTabs {
+  background: #fff;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
 .orderHeader {
   display: flex;
   align-items: center;
@@ -36,6 +41,12 @@
   border-bottom: 1rpx solid #f0f0f0;
 }
 
+.orderHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
 .orderNo {
   font-size: 24rpx;
   color: #999;
@@ -43,6 +54,38 @@
 
 .orderStatus {
   font-size: 26rpx;
+  font-weight: 500;
+}
+
+.reservationTag {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 4rpx 12rpx;
+  border-radius: 8rpx;
+}
+
+.reservationTagText {
+  font-size: 20rpx;
+  color: #fff;
+  font-weight: 500;
+}
+
+.discountInfo {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 12rpx 16rpx;
+  background: linear-gradient(135deg, #fff7e6 0%, #ffe7ba 100%);
+  border-radius: 8rpx;
+  margin-bottom: 16rpx;
+}
+
+.discountIcon {
+  font-size: 24rpx;
+}
+
+.discountText {
+  font-size: 24rpx;
+  color: #d46b08;
   font-weight: 500;
 }
 

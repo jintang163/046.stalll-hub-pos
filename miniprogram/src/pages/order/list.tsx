@@ -17,7 +17,14 @@ const statusMap: Record<number, { text: string; color: string }> = {
   6: { text: '已退款', color: '#909399' }
 }
 
-const tabList = [
+const reservationStatusMap: Record<number, { text: string; color: string }> = {
+  0: { text: '待确认', color: '#e6a23c' },
+  1: { text: '已确认', color: '#67c23a' },
+  2: { text: '已取消', color: '#909399' },
+  3: { text: '已完成', color: '#67c23a' }
+}
+
+const statusTabList = [
   { value: -1, title: '全部' },
   { value: 0, title: '待支付' },
   { value: 1, title: '待接单' },
@@ -25,8 +32,15 @@ const tabList = [
   { value: 3, title: '已完成' }
 ]
 
+const orderTypeTabList = [
+  { value: 'all', title: '全部' },
+  { value: 'instant', title: '即时订单' },
+  { value: 'reservation', title: '预约订单' }
+]
+
 const OrderList: React.FC = () => {
-  const [tabValue, setTabValue] = useState(0)
+  const [statusTabValue, setStatusTabValue] = useState(-1)
+  const [orderTypeTabValue, setOrderTypeTabValue] = useState<'all' | 'instant' | 'reservation'>('all')
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -48,8 +62,8 @@ const OrderList: React.FC = () => {
     setLoading(true)
     if (isRefresh) setRefreshing(true)
     try {
-      const status = tabValue === -1 ? undefined : tabValue
-      const result = await getOrders(status, pageNum, 10)
+      const status = statusTabValue === -1 ? undefined : statusTabValue
+      const result = await getOrders(status, pageNum, 10, orderTypeTabValue)
       
       if (pageNum === 1) {
         setOrders(result.list)
@@ -69,8 +83,13 @@ const OrderList: React.FC = () => {
     }
   }
 
-  const handleTabChange = (value: number) => {
-    setTabValue(value)
+  const handleStatusTabChange = (value: number) => {
+    setStatusTabValue(value)
+    loadOrders(1, true)
+  }
+
+  const handleOrderTypeTabChange = (value: string) => {
+    setOrderTypeTabValue(value as 'all' | 'instant' | 'reservation')
     loadOrders(1, true)
   }
 
@@ -142,11 +161,22 @@ const OrderList: React.FC = () => {
   return (
     <View className={styles.container}>
       <Tabs
-        value={tabValue}
-        onChange={handleTabChange}
+        value={orderTypeTabValue}
+        onChange={handleOrderTypeTabChange}
+        tabTitleStyle={{ fontSize: '26rpx' }}
+        className={styles.orderTypeTabs}
+      >
+        {orderTypeTabList.map(tab => (
+          <TabPane key={tab.value} title={tab.title} value={tab.value} />
+        ))}
+      </Tabs>
+
+      <Tabs
+        value={statusTabValue}
+        onChange={handleStatusTabChange}
         tabTitleStyle={{ fontSize: '28rpx' }}
       >
-        {tabList.map(tab => (
+        {statusTabList.map(tab => (
           <TabPane key={tab.value} title={tab.title} value={tab.value}>
             <PullRefresh
               onRefresh={handleRefresh}
@@ -167,7 +197,14 @@ const OrderList: React.FC = () => {
                       onClick={() => handleOrderClick(order)}
                     >
                       <View className={styles.orderHeader}>
-                        <Text className={styles.orderNo}>订单号：{order.order_no}</Text>
+                        <View className={styles.orderHeaderLeft}>
+                          <Text className={styles.orderNo}>订单号：{order.order_no}</Text>
+                          {order.is_reservation && (
+                            <View className={styles.reservationTag}>
+                              <Text className={styles.reservationTagText}>预约</Text>
+                            </View>
+                          )}
+                        </View>
                         <Text
                           className={styles.orderStatus}
                           style={{ color: statusMap[order.status]?.color }}
@@ -175,6 +212,39 @@ const OrderList: React.FC = () => {
                           {statusMap[order.status]?.text}
                         </Text>
                       </View>
+
+                      {order.is_reservation && order.reservation_status !== undefined && (
+                        <View className={styles.orderInfo}>
+                          <Text className={styles.infoLabel}>预约状态：</Text>
+                          <Text
+                            className={styles.infoValue}
+                            style={{ color: reservationStatusMap[order.reservation_status]?.color }}
+                          >
+                            {reservationStatusMap[order.reservation_status]?.text}
+                          </Text>
+                        </View>
+                      )}
+
+                      {order.is_reservation && order.reservation_time && (
+                        <View className={styles.orderInfo}>
+                          <Text className={styles.infoLabel}>预约时间：</Text>
+                          <Text className={styles.infoValue}>{order.reservation_time}</Text>
+                        </View>
+                      )}
+
+                      {order.is_reservation && order.time_slot_name && (
+                        <View className={styles.orderInfo}>
+                          <Text className={styles.infoLabel}>时段：</Text>
+                          <Text className={styles.infoValue}>{order.time_slot_name}</Text>
+                        </View>
+                      )}
+
+                      {order.time_slot_discount && (
+                        <View className={styles.discountInfo}>
+                          <Text className={styles.discountIcon}>🎉</Text>
+                          <Text className={styles.discountText}>{order.time_slot_discount}</Text>
+                        </View>
+                      )}
 
                       {order.table_no && (
                         <View className={styles.orderInfo}>
