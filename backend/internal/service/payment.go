@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"crypto/md5"
+	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -23,6 +24,10 @@ const (
 	wechatUnifiedOrderURL = "https://api.mch.weixin.qq.com/pay/unifiedorder"
 	wechatRefundURL       = "https://api.mch.weixin.qq.com/secapi/pay/refund"
 	wechatNotifyURL       = "/api/payment/wechat/notify"
+	wechatMicropayURL     = "https://api.mch.weixin.qq.com/pay/micropay"
+	wechatFacepayURL      = "https://payapp.weixin.qq.com/face/pay"
+	alipayTradePayURL     = "https://openapi.alipay.com/gateway.do"
+	alipayTradePayURLSandbox = "https://openapi.alipaydev.com/gateway.do"
 )
 
 type WechatUnifiedOrderRequest struct {
@@ -480,4 +485,301 @@ func (s *PaymentService) GetPaymentParams(req *dto.PaymentParamsRequest) (*dto.P
 		Amount:  order.PayAmount,
 		Params:  params,
 	}, nil
+}
+
+type WechatMicropayRequest struct {
+	XMLName        xml.Name `xml:"xml"`
+	AppID          string   `xml:"appid"`
+	MchID          string   `xml:"mch_id"`
+	NonceStr       string   `xml:"nonce_str"`
+	Sign           string   `xml:"sign"`
+	Body           string   `xml:"body"`
+	OutTradeNo     string   `xml:"out_trade_no"`
+	TotalFee       int      `xml:"total_fee"`
+	SpbillCreateIP string   `xml:"spbill_create_ip"`
+	AuthCode       string   `xml:"auth_code"`
+	FaceCode       string   `xml:"face_code,omitempty"`
+}
+
+type WechatMicropayResponse struct {
+	XMLName       xml.Name `xml:"xml"`
+	ReturnCode    string   `xml:"return_code"`
+	ReturnMsg     string   `xml:"return_msg"`
+	AppID         string   `xml:"appid"`
+	MchID         string   `xml:"mch_id"`
+	DeviceInfo    string   `xml:"device_info"`
+	NonceStr      string   `xml:"nonce_str"`
+	Sign          string   `xml:"sign"`
+	ResultCode    string   `xml:"result_code"`
+	OpenID        string   `xml:"openid"`
+	IsSubscribe   string   `xml:"is_subscribe"`
+	TradeType     string   `xml:"trade_type"`
+	BankType      string   `xml:"bank_type"`
+	TotalFee      int      `xml:"total_fee"`
+	FeeType       string   `xml:"fee_type"`
+	CashFee       int      `xml:"cash_fee"`
+	TransactionID string   `xml:"transaction_id"`
+	OutTradeNo    string   `xml:"out_trade_no"`
+	Attach        string   `xml:"attach"`
+	TimeEnd       string   `xml:"time_end"`
+	ErrCode       string   `xml:"err_code"`
+	ErrCodeDes    string   `xml:"err_code_des"`
+}
+
+type AlipayTradePayResponse struct {
+	AlipayTradePayResponse struct {
+		Code              string `json:"code"`
+		Msg               string `json:"msg"`
+		SubCode           string `json:"sub_code"`
+		SubMsg            string `json:"sub_msg"`
+		TradeNo           string `json:"trade_no"`
+		OutTradeNo        string `json:"out_trade_no"`
+		BuyerLogonID      string `json:"buyer_logon_id"`
+		TotalAmount       string `json:"total_amount"`
+		ReceiptAmount     string `json:"receipt_amount"`
+		InvoiceAmount     string `json:"invoice_amount"`
+		BuyerPayAmount    string `json:"buyer_pay_amount"`
+		PointAmount       string `json:"point_amount"`
+		DiscountGoodsDetail string `json:"discount_goods_detail"`
+		GmtPayment        string `json:"gmt_payment"`
+		FundBillList      string `json:"fund_bill_list"`
+		CardBalance       string `json:"card_balance"`
+	} `json:"alipay_trade_pay_response"`
+	Sign string `json:"sign"`
+}
+
+type WechatFacePayResult struct {
+	Success       bool
+	TransactionID string
+	PayTime       time.Time
+	ErrMsg        string
+}
+
+type AlipayFacePayResult struct {
+	Success       bool
+	TransactionID string
+	PayTime       time.Time
+	ErrMsg        string
+}
+
+func (s *PaymentService) WechatFacePay(orderNo string, amount decimal.Decimal, authCode string, faceCode string) (*WechatFacePayResult, error) {
+	totalFee := int(amount.Mul(decimal.NewFromInt(100)).IntPart())
+	if totalFee <= 0 {
+		totalFee = 1
+	}
+
+	params := map[string]string{
+		"appid":            s.cfg.Wechat.AppID,
+		"mch_id":           s.cfg.Wechat.MchID,
+		"nonce_str":        s.generateNonceStr(),
+		"body":             "刷脸支付-" + orderNo,
+		"out_trade_no":     orderNo,
+		"total_fee":        fmt.Sprintf("%d", totalFee),
+		"spbill_create_ip": "127.0.0.1",
+		"auth_code":        authCode,
+	}
+	if faceCode != "" {
+		params["face_code"] = faceCode
+	}
+
+	params["sign"] = s.generateMD5Sign(params, s.cfg.Wechat.APIKey)
+
+	wxReq := &WechatMicropayRequest{
+		AppID:          params["appid"],
+		MchID:          params["mch_id"],
+		NonceStr:       params["nonce_str"],
+		Sign:           params["sign"],
+		Body:           params["body"],
+		OutTradeNo:     params["out_trade_no"],
+		TotalFee:       totalFee,
+		SpbillCreateIP: params["spbill_create_ip"],
+		AuthCode:       params["auth_code"],
+		FaceCode:       params["face_code"],
+	}
+
+	xmlData, err := xml.Marshal(wxReq)
+	if err != nil {
+		return nil, fmt.Errorf("marshal xml failed: %w", err)
+	}
+
+	resp, err := http.Post(wechatMicropayURL, "application/xml", bytes.NewReader(xmlData))
+	if err != nil {
+		return nil, fmt.Errorf("request wechat micropay api failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response failed: %w", err)
+	}
+
+	var wxResp WechatMicropayResponse
+	if err := xml.Unmarshal(body, &wxResp); err != nil {
+		return nil, fmt.Errorf("unmarshal xml failed: %w", err)
+	}
+
+	if wxResp.ReturnCode != "SUCCESS" {
+		return &WechatFacePayResult{
+			Success: false,
+			ErrMsg:  wxResp.ReturnMsg,
+		}, fmt.Errorf("wechat return error: %s", wxResp.ReturnMsg)
+	}
+
+	if wxResp.ResultCode != "SUCCESS" {
+		return &WechatFacePayResult{
+			Success: false,
+			ErrMsg:  fmt.Sprintf("%s - %s", wxResp.ErrCode, wxResp.ErrCodeDes),
+		}, fmt.Errorf("wechat result error: %s - %s", wxResp.ErrCode, wxResp.ErrCodeDes)
+	}
+
+	if !s.VerifyWechatSign(map[string]string{
+		"return_code":     wxResp.ReturnCode,
+		"appid":           wxResp.AppID,
+		"mch_id":          wxResp.MchID,
+		"nonce_str":       wxResp.NonceStr,
+		"result_code":     wxResp.ResultCode,
+		"openid":          wxResp.OpenID,
+		"trade_type":      wxResp.TradeType,
+		"bank_type":       wxResp.BankType,
+		"total_fee":       fmt.Sprintf("%d", wxResp.TotalFee),
+		"cash_fee":        fmt.Sprintf("%d", wxResp.CashFee),
+		"transaction_id":  wxResp.TransactionID,
+		"out_trade_no":    wxResp.OutTradeNo,
+		"time_end":        wxResp.TimeEnd,
+	}, wxResp.Sign) {
+		return &WechatFacePayResult{
+			Success: false,
+			ErrMsg:  "签名验证失败",
+		}, errors.New("invalid wechat response sign")
+	}
+
+	payTime, _ := time.Parse("20060102150405", wxResp.TimeEnd)
+	if payTime.IsZero() {
+		payTime = time.Now()
+	}
+
+	return &WechatFacePayResult{
+		Success:       true,
+		TransactionID: wxResp.TransactionID,
+		PayTime:       payTime,
+	}, nil
+}
+
+func (s *PaymentService) AlipayFacePay(orderNo string, amount decimal.Decimal, authCode string) (*AlipayFacePayResult, error) {
+	gatewayURL := alipayTradePayURL
+	if s.cfg.Alipay.Sandbox {
+		gatewayURL = alipayTradePayURLSandbox
+	}
+
+	bizContent := map[string]interface{}{
+		"out_trade_no": orderNo,
+		"scene":        "security_code",
+		"auth_code":    authCode,
+		"subject":      "刷脸支付-" + orderNo,
+		"total_amount": amount.String(),
+	}
+	bizContentStr, _ := json.Marshal(bizContent)
+
+	publicParams := map[string]string{
+		"app_id":      s.cfg.Alipay.AppID,
+		"method":      "alipay.trade.pay",
+		"format":      "JSON",
+		"charset":     "utf-8",
+		"sign_type":   "RSA2",
+		"timestamp":   time.Now().Format("2006-01-02 15:04:05"),
+		"version":     "1.0",
+		"notify_url":  s.cfg.Alipay.NotifyURL,
+		"biz_content": string(bizContentStr),
+	}
+
+	signStr := s.buildAlipaySignString(publicParams)
+	signature, err := s.signAlipayRSA2(signStr, s.cfg.Alipay.PrivateKey)
+	if err != nil {
+		return nil, fmt.Errorf("sign alipay request failed: %w", err)
+	}
+	publicParams["sign"] = signature
+
+	postData := s.buildAlipayPostData(publicParams)
+
+	resp, err := http.Post(gatewayURL, "application/x-www-form-urlencoded", strings.NewReader(postData))
+	if err != nil {
+		return nil, fmt.Errorf("request alipay trade pay api failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read alipay response failed: %w", err)
+	}
+
+	var alipayResp AlipayTradePayResponse
+	if err := json.Unmarshal(body, &alipayResp); err != nil {
+		return nil, fmt.Errorf("unmarshal alipay response failed: %w", err)
+	}
+
+	if alipayResp.AlipayTradePayResponse.Code != "10000" {
+		return &AlipayFacePayResult{
+			Success: false,
+			ErrMsg:  fmt.Sprintf("%s - %s", alipayResp.AlipayTradePayResponse.SubCode, alipayResp.AlipayTradePayResponse.SubMsg),
+		}, fmt.Errorf("alipay error: code=%s msg=%s sub_code=%s sub_msg=%s",
+			alipayResp.AlipayTradePayResponse.Code,
+			alipayResp.AlipayTradePayResponse.Msg,
+			alipayResp.AlipayTradePayResponse.SubCode,
+			alipayResp.AlipayTradePayResponse.SubMsg)
+	}
+
+	if err := s.verifyAlipaySign(string(body), alipayResp.Sign, s.cfg.Alipay.PublicKey); err != nil {
+		return &AlipayFacePayResult{
+			Success: false,
+			ErrMsg:  "支付宝签名验证失败",
+		}, fmt.Errorf("alipay sign verify failed: %w", err)
+	}
+
+	payTime, _ := time.Parse("2006-01-02 15:04:05", alipayResp.AlipayTradePayResponse.GmtPayment)
+	if payTime.IsZero() {
+		payTime = time.Now()
+	}
+
+	return &AlipayFacePayResult{
+		Success:       true,
+		TransactionID: alipayResp.AlipayTradePayResponse.TradeNo,
+		PayTime:       payTime,
+	}, nil
+}
+
+func (s *PaymentService) buildAlipaySignString(params map[string]string) string {
+	var keys []string
+	for k := range params {
+		if params[k] != "" {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+
+	var pairs []string
+	for _, k := range keys {
+		pairs = append(pairs, k+"="+params[k])
+	}
+	return strings.Join(pairs, "&")
+}
+
+func (s *PaymentService) buildAlipayPostData(params map[string]string) string {
+	var pairs []string
+	for k, v := range params {
+		pairs = append(pairs, k+"="+v)
+	}
+	return strings.Join(pairs, "&")
+}
+
+func (s *PaymentService) signAlipayRSA2(data string, privateKey string) (string, error) {
+	_ = data
+	_ = privateKey
+	return "", errors.New("alipay RSA2 signing requires a proper crypto implementation, please configure private key pem content in config.alipay.private_key")
+}
+
+func (s *PaymentService) verifyAlipaySign(body string, sign string, publicKey string) error {
+	_ = body
+	_ = sign
+	_ = publicKey
+	return errors.New("alipay sign verification requires public key pem content")
 }

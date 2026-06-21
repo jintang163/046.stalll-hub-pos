@@ -158,6 +158,57 @@ const transactionId = ref('')
 const payTime = ref('')
 const pollingTimer = ref(null)
 
+const handleFaceAuthSuccess = async (data) => {
+  console.log('[FacePaymentDialog] face auth success from device:', data)
+  if (!data || !data.auth_code) return
+  if (data.face_payment_id && data.face_payment_id !== facePaymentId.value) return
+
+  authCompleted.value = true
+  authSuccess.value = true
+
+  try {
+    const result = await confirmFacePayment({
+      face_payment_id: facePaymentId.value,
+      provider: data.provider || selectedProvider.value,
+      auth_code: data.auth_code,
+      open_id: data.open_id || ''
+    })
+    onPaymentSuccess(result)
+  } catch (e) {
+    authSuccess.value = false
+    authError.value = e.message || '支付确认失败'
+    onPaymentFail(e.message)
+  }
+}
+
+const handleFaceAuthFail = (data) => {
+  console.log('[FacePaymentDialog] face auth failed from device:', data)
+  authCompleted.value = true
+  authSuccess.value = false
+  authError.value = data?.error || '刷脸失败'
+}
+
+const handleFaceAuthTimeout = (data) => {
+  console.log('[FacePaymentDialog] face auth timeout from device:', data)
+  authCompleted.value = true
+  authSuccess.value = false
+  authError.value = '刷脸超时，请重新尝试'
+}
+
+const registerDeviceListeners = () => {
+  if (!window.ipcRenderer?.on) return
+  window.ipcRenderer.on('face-payment:auth-success', handleFaceAuthSuccess)
+  window.ipcRenderer.on('face-payment:auth-fail', handleFaceAuthFail)
+  window.ipcRenderer.on('face-payment:timeout', handleFaceAuthTimeout)
+}
+
+const unregisterDeviceListeners = () => {
+  if (!window.ipcRenderer?.removeListener) return
+  window.ipcRenderer.removeListener('face-payment:auth-success', handleFaceAuthSuccess)
+  window.ipcRenderer.removeListener('face-payment:auth-fail', handleFaceAuthFail)
+  window.ipcRenderer.removeListener('face-payment:timeout', handleFaceAuthTimeout)
+}
+
 const getProviderName = (provider) => {
   const map = {
     alipay_face: '支付宝刷脸',
@@ -328,6 +379,11 @@ const handleClose = () => {
 
 onBeforeUnmount(() => {
   stopPolling()
+  unregisterDeviceListeners()
+})
+
+onMounted(() => {
+  registerDeviceListeners()
 })
 </script>
 

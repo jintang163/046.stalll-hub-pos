@@ -12,7 +12,12 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
       'nsq:stock:updated',
       'nsq:order:updated',
       'nsq:message',
-      'voice:speak'
+      'voice:speak',
+      'face-payment:alipay:started',
+      'face-payment:wechat:started',
+      'face-payment:auth-success',
+      'face-payment:auth-fail',
+      'face-payment:timeout'
     ]
     if (validChannels.includes(channel)) {
       ipcRenderer.on(channel, (event, ...args) => callback(...args))

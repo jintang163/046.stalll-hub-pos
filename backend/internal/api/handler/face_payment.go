@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"time"
 
+	"stalll-hub-pos/backend/config"
 	"stalll-hub-pos/backend/internal/dto"
 	"stalll-hub-pos/backend/internal/middleware"
 	"stalll-hub-pos/backend/internal/model"
 	"stalll-hub-pos/backend/internal/repository"
+	"stalll-hub-pos/backend/internal/service"
 	"stalll-hub-pos/backend/pkg/database"
 	"stalll-hub-pos/backend/pkg/nsq"
 
@@ -29,12 +31,14 @@ const (
 )
 
 type FacePaymentHandler struct {
-	orderRepo *repository.OrderRepository
+	orderRepo     *repository.OrderRepository
+	paymentService *service.PaymentService
 }
 
 func NewFacePaymentHandler() *FacePaymentHandler {
 	return &FacePaymentHandler{
-		orderRepo: repository.NewOrderRepository(),
+		orderRepo:      repository.NewOrderRepository(),
+		paymentService: service.NewPaymentService(config.AppConfig),
 	}
 }
 
@@ -321,15 +325,33 @@ func (h *FacePaymentHandler) buildWechatAuthInfo(facePaymentID string, order *mo
 }
 
 func (h *FacePaymentHandler) processAlipayFacePayment(record *model.FacePaymentRecord, authCode string) (string, time.Time, error) {
-	transactionID := fmt.Sprintf("ALI%s", time.Now().Format("20060102150405"))
-	payTime := time.Now()
-	return transactionID, payTime, nil
+	if authCode == "" {
+		return "", time.Time{}, fmt.Errorf("刷脸凭证auth_code不能为空")
+	}
+
+	result, err := h.paymentService.AlipayFacePay(record.OrderNo, record.Amount, authCode)
+	if err != nil {
+		return "", time.Time{}, fmt.Errorf("支付宝刷脸支付失败: %w", err)
+	}
+	if !result.Success {
+		return "", time.Time{}, fmt.Errorf("支付宝刷脸支付失败: %s", result.ErrMsg)
+	}
+	return result.TransactionID, result.PayTime, nil
 }
 
 func (h *FacePaymentHandler) processWechatFacePayment(record *model.FacePaymentRecord, authCode string) (string, time.Time, error) {
-	transactionID := fmt.Sprintf("WX%s", time.Now().Format("20060102150405"))
-	payTime := time.Now()
-	return transactionID, payTime, nil
+	if authCode == "" {
+		return "", time.Time{}, fmt.Errorf("刷脸凭证auth_code不能为空")
+	}
+
+	result, err := h.paymentService.WechatFacePay(record.OrderNo, record.Amount, authCode, "")
+	if err != nil {
+		return "", time.Time{}, fmt.Errorf("微信刷脸支付失败: %w", err)
+	}
+	if !result.Success {
+		return "", time.Time{}, fmt.Errorf("微信刷脸支付失败: %s", result.ErrMsg)
+	}
+	return result.TransactionID, result.PayTime, nil
 }
 
 func (h *FacePaymentHandler) publishPaySuccessMessages(record *model.FacePaymentRecord, transactionID string) {
