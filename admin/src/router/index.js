@@ -193,6 +193,24 @@ const routes = [
         name: 'Recommendations',
         component: () => import('@/views/recommendations/index.vue'),
         meta: { title: '智能推荐', icon: 'MagicStick' }
+      },
+      {
+        path: 'suppliers',
+        name: 'Suppliers',
+        component: () => import('@/views/suppliers/index.vue'),
+        meta: { title: '供应商管理', icon: 'ShoppingCart' }
+      },
+      {
+        path: 'purchase-orders',
+        name: 'PurchaseOrders',
+        component: () => import('@/views/purchase-orders/index.vue'),
+        meta: { title: '采购订单', icon: 'Purchase' }
+      },
+      {
+        path: 'payables',
+        name: 'Payables',
+        component: () => import('@/views/payables/index.vue'),
+        meta: { title: '应付账款', icon: 'Money' }
       }
     ]
   }

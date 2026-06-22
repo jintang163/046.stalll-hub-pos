@@ -46,6 +46,10 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 	reviewHandler := handler.NewReviewHandler()
 	smsHandler := handler.NewSmsHandler()
 	transferHandler := handler.NewTransferHandler()
+	supplierHandler := handler.NewSupplierHandler()
+	purchaseV2Handler := handler.NewPurchaseOrderV2Handler()
+	purchaseReceiveHandler := handler.NewPurchaseReceiveHandler()
+	payableHandler := handler.NewAccountsPayableHandler()
 
 	orderHandler := handler.NewOrderHandler(nil)
 
@@ -647,6 +651,65 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 			transfers.POST("/:id/cancel", transferHandler.CancelTransfer)
 			transfers.GET("/:id/logistics", transferHandler.GetLogisticsTrack)
 			transfers.POST("/:id/logistics/refresh", transferHandler.RefreshLogistics)
+		}
+
+		suppliers := api.Group("/suppliers")
+		suppliers.Use(middleware.JWTAuth())
+		{
+			suppliers.POST("", supplierHandler.CreateSupplier)
+			suppliers.GET("", supplierHandler.ListSuppliers)
+			suppliers.GET("/enums", supplierHandler.GetEnums)
+			suppliers.GET("/categories", supplierHandler.GetSupplierCategories)
+			suppliers.GET("/stats", supplierHandler.GetSupplierStats)
+			suppliers.GET("/:id", supplierHandler.GetSupplier)
+			suppliers.PUT("/:id", supplierHandler.UpdateSupplier)
+			suppliers.DELETE("/:id", supplierHandler.DeleteSupplier)
+			suppliers.POST("/:id/notify", supplierHandler.NotifySupplier)
+		}
+
+		purchaseOrdersV2 := api.Group("/purchase-orders")
+		purchaseOrdersV2.Use(middleware.JWTAuth())
+		{
+			purchaseOrdersV2.POST("", purchaseV2Handler.CreatePurchaseOrder)
+			purchaseOrdersV2.GET("", purchaseV2Handler.ListPurchaseOrders)
+			purchaseOrdersV2.GET("/:id", purchaseV2Handler.GetPurchaseOrder)
+			purchaseOrdersV2.POST("/:id/send", purchaseV2Handler.SendToSupplier)
+			purchaseOrdersV2.POST("/:id/complete", purchaseV2Handler.CompletePurchase)
+			purchaseOrdersV2.POST("/:id/cancel", purchaseV2Handler.CancelPurchase)
+		}
+
+		purchaseReceives := api.Group("/purchase-receives")
+		purchaseReceives.Use(middleware.JWTAuth())
+		{
+			purchaseReceives.POST("", purchaseReceiveHandler.CreateReceive)
+			purchaseReceives.GET("", purchaseReceiveHandler.ListReceives)
+			purchaseReceives.GET("/:id", purchaseReceiveHandler.GetReceive)
+		}
+
+		payables := api.Group("/accounts-payable")
+		payables.Use(middleware.JWTAuth())
+		{
+			payables.GET("", payableHandler.ListPayables)
+			payables.GET("/stats", payableHandler.GetPayableStats)
+			payables.GET("/:id", payableHandler.GetPayable)
+			payables.POST("/update-overdue", payableHandler.UpdateOverdueStatus)
+		}
+
+		payablePayments := api.Group("/payable-payments")
+		payablePayments.Use(middleware.JWTAuth())
+		{
+			payablePayments.POST("", payableHandler.CreatePayment)
+			payablePayments.GET("", payableHandler.ListPayments)
+		}
+
+		reconciliations := api.Group("/reconciliations")
+		reconciliations.Use(middleware.JWTAuth())
+		{
+			reconciliations.POST("", payableHandler.CreateReconciliation)
+			reconciliations.GET("", payableHandler.ListReconciliations)
+			reconciliations.GET("/:id", payableHandler.GetReconciliation)
+			reconciliations.POST("/:id/confirm", payableHandler.ConfirmReconciliation)
+			reconciliations.POST("/:id/supplier-amount", payableHandler.InputSupplierAmount)
 		}
 	}
 

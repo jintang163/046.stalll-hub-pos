@@ -8,21 +8,27 @@ import (
 
 type PurchaseOrder struct {
 	BaseModel
-	StoreID       uint            `gorm:"not null;index" json:"store_id"`
-	PurchaseNo    string          `gorm:"size:50;not null;uniqueIndex" json:"purchase_no"`
-	SupplierName  string          `gorm:"size:100" json:"supplier_name"`
-	SupplierPhone string          `gorm:"size:20" json:"supplier_phone"`
-	SupplierEmail string          `gorm:"size:100" json:"supplier_email"`
-	TotalAmount   decimal.Decimal `gorm:"type:decimal(12,2);default:0" json:"total_amount"`
-	TotalQuantity int             `gorm:"default:0" json:"total_quantity"`
-	ItemCount     int             `gorm:"default:0" json:"item_count"`
-	Status        int             `gorm:"default:0;index" json:"status"`
-	ForecastDate  string          `gorm:"size:10;index" json:"forecast_date"`
-	ForecastDays  int             `gorm:"default:3" json:"forecast_days"`
-	Remark        string          `gorm:"size:255" json:"remark"`
-	SentAt        *time.Time      `json:"sent_at"`
-	Items         []PurchaseOrderItem `gorm:"foreignKey:PurchaseID" json:"items,omitempty"`
-	Store         Store           `gorm:"foreignKey:StoreID" json:"store,omitempty"`
+	StoreID          uint            `gorm:"not null;index" json:"store_id"`
+	SupplierID       uint            `gorm:"index" json:"supplier_id"`
+	PurchaseNo       string          `gorm:"size:50;not null;uniqueIndex" json:"purchase_no"`
+	SupplierName     string          `gorm:"size:100" json:"supplier_name"`
+	SupplierPhone    string          `gorm:"size:20" json:"supplier_phone"`
+	SupplierEmail    string          `gorm:"size:100" json:"supplier_email"`
+	TotalAmount      decimal.Decimal `gorm:"type:decimal(12,2);default:0" json:"total_amount"`
+	ReceivedAmount   decimal.Decimal `gorm:"type:decimal(12,2);default:0" json:"received_amount"`
+	TotalQuantity    int             `gorm:"default:0" json:"total_quantity"`
+	ReceivedQuantity int             `gorm:"default:0" json:"received_quantity"`
+	ItemCount        int             `gorm:"default:0" json:"item_count"`
+	Status           int             `gorm:"default:0;index" json:"status"`
+	ForecastDate     string          `gorm:"size:10;index" json:"forecast_date"`
+	ForecastDays     int             `gorm:"default:3" json:"forecast_days"`
+	PaymentTerm      int             `gorm:"default:0" json:"payment_term"`
+	ExpectedDate     string          `gorm:"size:10" json:"expected_date"`
+	Remark           string          `gorm:"size:255" json:"remark"`
+	SentAt           *time.Time      `json:"sent_at"`
+	Items            []PurchaseOrderItem `gorm:"foreignKey:PurchaseID" json:"items,omitempty"`
+	Store            Store           `gorm:"foreignKey:StoreID" json:"store,omitempty"`
+	Supplier         *Supplier       `gorm:"foreignKey:SupplierID" json:"supplier,omitempty"`
 }
 
 type PurchaseOrderItem struct {
@@ -36,6 +42,7 @@ type PurchaseOrderItem struct {
 	SafetyStockQty decimal.Decimal `gorm:"type:decimal(10,2)" json:"safety_stock_qty"`
 	CurrentStock   decimal.Decimal `gorm:"type:decimal(10,2)" json:"current_stock"`
 	PurchaseQty    decimal.Decimal `gorm:"type:decimal(10,2)" json:"purchase_qty"`
+	ReceivedQty    decimal.Decimal `gorm:"type:decimal(10,2);default:0" json:"received_qty"`
 	UnitPrice      decimal.Decimal `gorm:"type:decimal(10,2)" json:"unit_price"`
 	Subtotal       decimal.Decimal `gorm:"type:decimal(10,2)" json:"subtotal"`
 	SortOrder      int             `gorm:"default:0" json:"sort_order"`
