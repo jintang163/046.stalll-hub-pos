@@ -139,6 +139,16 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 			internalPrinters.GET("/:id", storeHandler.GetPrinter)
 		}
 
+		internalReceiptAds := api.Group("/internal/receipt-ads")
+		{
+			internalReceiptAds.GET("", receiptAdHandler.GetActiveAdsInternal)
+			internalReceiptAds.POST("/views", receiptAdHandler.IncrementViewCountInternal)
+		}
+
+		api.GET("/r/:id", receiptAdHandler.RecordClickPublic)
+		api.GET("/r/:id/info", receiptAdHandler.GetAdDetailPublic)
+		api.POST("/r/:id/view", receiptAdHandler.RecordClickView)
+
 		members := api.Group("/members")
 		members.Use(middleware.JWTAuth())
 		{

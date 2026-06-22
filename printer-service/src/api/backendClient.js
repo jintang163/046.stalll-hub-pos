@@ -9,7 +9,6 @@ class BackendApiClient {
     this.timeout = config.backend.timeout;
     this.internalToken = config.backend.internalToken;
   }
-
   buildHeaders() {
     const headers = {
       'Content-Type': 'application/json',
@@ -155,6 +154,49 @@ class BackendApiClient {
     } catch (err) {
       logger.error('[BackendAPI] 查询打印机详情失败: id=%s, error=%s', id, err.message);
       throw err;
+    }
+  }
+
+  async getReceiptAds(storeId, position = 'footer') {
+    logger.debug('[BackendAPI] 查询小票广告: storeId=%s, position=%s', storeId, position);
+    try {
+      const resp = await this.get('/internal/receipt-ads', { store_id: storeId, position });
+      let data;
+      if (resp && resp.code === 0 && resp.data) {
+        data = resp.data;
+      } else {
+        data = resp;
+      }
+      if (Array.isArray(data)) {
+        return data;
+      }
+      if (data && Array.isArray(data.list)) {
+        return data.list;
+      }
+      return [];
+    } catch (err) {
+      logger.warn('[BackendAPI] 查询小票广告失败: storeId=%s, error=%s', storeId, err.message);
+      return [];
+    }
+  }
+
+  async reportAdView(adId) {
+    try {
+      await this.request('POST', '/internal/receipt-ads/views', {
+        body: { ad_id: adId }
+      });
+    } catch (err) {
+      logger.debug('[BackendAPI] 广告展示上报失败: adId=%s, error=%s', adId, err.message);
+    }
+  }
+
+  async reportAdClick(adId, orderId, orderNo) {
+    try {
+      await this.request('POST', '/r/' + adId + '/view', {
+        body: { order_id: orderId, order_no: orderNo }
+      });
+    } catch (err) {
+      logger.debug('[BackendAPI] 广告点击上报失败: adId=%s, error=%s', adId, err.message);
     }
   }
 }

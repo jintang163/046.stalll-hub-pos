@@ -3,6 +3,7 @@
 const logger = require('../utils/logger');
 const { templateManager } = require('../templates');
 const { PRINTER_CONNECTION_TYPES } = require('../constants');
+const backendClient = require('../api/backendClient');
 const iconv = require('iconv-lite');
 
 class BasePrinter {
@@ -63,7 +64,7 @@ class BasePrinter {
     };
   }
 
-  buildEscPosBytes(printData) {
+  async buildEscPosBytes(printData) {
     const EscPosPrinter = require('./escpos').EscPosPrinter;
     const printer = new EscPosPrinter();
     printer.setEncoding(this.encoding);
@@ -74,11 +75,110 @@ class BasePrinter {
 
     const renderedLines = templateManager.formatTemplate(template, data);
 
+    if (type === 'receipt' && this.storeId) {
+      await this.appendReceiptAds(printer, this.storeId, 'header', data);
+    }
+
     for (const element of renderedLines) {
       this.applyTemplateElement(printer, element);
     }
 
+    if (type === 'receipt' && this.storeId) {
+      await this.appendReceiptAds(printer, this.storeId, 'footer', data);
+    }
+
     return printer.Bytes();
+  }
+
+  async appendReceiptAds(printer, storeId, position, orderData = {}) {
+    try {
+      const ads = await backendClient.getReceiptAds(storeId, position);
+      if (!ads || ads.length === 0) return;
+
+      for (const ad of ads) {
+        printer.PrintSeparator();
+        printer.Feed(1);
+
+        if (ad.ad_type === 'qrcode') {
+          let qrContent = ad.qr_code_content || '';
+          if (ad.link_url) {
+            qrContent = ad.link_url;
+          }
+          if (!qrContent) {
+            const baseUrl = backendClient.baseUrl || '';
+            const orderId = orderData.id || '';
+            const orderNo = orderData.orderNo || '';
+            let shortLink = `${baseUrl}/r/${ad.id}`;
+            if (orderId) shortLink += `?order_id=${orderId}`;
+            if (orderNo) shortLink += orderId ? `&order_no=${orderNo}` : `?order_no=${orderNo}`;
+            qrContent = shortLink;
+          }
+
+          if (ad.title) {
+            printer.setTextAlign('center');
+            printer.setTextBold(true);
+            printer.text(ad.title);
+            printer.setTextBold(false);
+          }
+          if (ad.subtitle) {
+            printer.setTextAlign('center');
+            printer.text(ad.subtitle);
+          }
+          printer.Feed(1);
+          printer.setTextAlign('center');
+          printer.PrintQRCode(qrContent, 8);
+          printer.Feed(1);
+          if (ad.content) {
+            printer.setTextAlign('center');
+            printer.text(ad.content);
+          }
+          printer.setTextAlign('left');
+        } else if (ad.ad_type === 'image' && ad.image_url) {
+          if (ad.title) {
+            printer.setTextAlign('center');
+            printer.setTextBold(true);
+            printer.text(ad.title);
+            printer.setTextBold(false);
+          }
+          if (ad.content) {
+            printer.setTextAlign('center');
+            printer.text(ad.content);
+          }
+          if (ad.subtitle) {
+            printer.setTextAlign('center');
+            printer.text(ad.subtitle);
+          }
+          printer.setTextAlign('left');
+          printer.Feed(1);
+          await printer.PrintImageFromURL(ad.image_url);
+          printer.Feed(1);
+        } else {
+          if (ad.title) {
+            printer.setTextAlign('center');
+            printer.setTextBold(true);
+            printer.text(ad.title);
+            printer.setTextBold(false);
+          }
+          if (ad.content) {
+            printer.setTextAlign('center');
+            printer.text(ad.content);
+          }
+          if (ad.subtitle) {
+            printer.setTextAlign('center');
+            printer.text(ad.subtitle);
+          }
+          printer.setTextAlign('left');
+        }
+
+        printer.Feed(1);
+
+        setImmediate(() => {
+          backendClient.reportAdView(ad.id).catch(() => {});
+        });
+      }
+    } catch (err) {
+      logger.warn('[Printer] 广告渲染失败: position=%s, error=%s', position, err.message);
+    }
   }
 
   applyTemplateElement(printer, element) {
@@ -102,6 +202,28 @@ class BasePrinter {
         }
         if (element.align) {
           printer.align('left');
+        }
+        break;
+
+      case 'qrcode':
+        if (element.align) {
+          printer.align(element.align);
+        }
+        printer.PrintQRCode(element.content || '', element.size || 8);
+        if (element.align) {
+          printer.align('left');
+        }
+        break;
+
+      case 'image':
+        if (element.url) {
+          if (element.align) {
+            printer.align(element.align);
+          }
+          printer.PrintImageFromURL(element.url, element.maxWidth || 384);
+          if (element.align) {
+            printer.align('left');
+          }
         }
         break;
 
@@ -218,7 +340,7 @@ class NetworkPrinter extends BasePrinter {
 
     return new Promise((resolve, reject) => {
       try {
-        const escposBytes = this.buildEscPosBytes(printData);
+        const escposBytes = await this.buildEscPosBytes(printData);
 
         let settled = false;
         const finish = (err, result) => {

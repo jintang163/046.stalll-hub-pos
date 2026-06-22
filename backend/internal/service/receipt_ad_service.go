@@ -132,6 +132,14 @@ func (s *ReceiptAdService) GetActiveAds(storeID uint, position string) ([]model.
 	return s.adRepo.GetActiveAds(storeID, position)
 }
 
+func (s *ReceiptAdService) GetAdStoreID(adID uint) (uint, *model.ReceiptAd, error) {
+	ad, err := s.adRepo.GetByID(adID)
+	if err != nil {
+		return 0, nil, err
+	}
+	return ad.StoreID, ad, nil
+}
+
 func (s *ReceiptAdService) UpdateStatus(id uint, status int) error {
 	_, err := s.adRepo.GetByID(id)
 	if err != nil {
