@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"errors"
 	"math"
 	"time"
 
@@ -188,4 +189,188 @@ func (r *RecommendRepository) GetMemberHistoryProducts(storeID uint, memberID ui
 		}
 	}
 	return list, err
+}
+
+type TableHistoryProduct struct {
+	ProductID    uint
+	ProductName  string
+	CategoryID   uint
+	OrderCount   int
+	TotalQty     int
+	LastOrderDays int
+	HistoryScore float64
+}
+
+func (r *RecommendRepository) GetTableHistoryProducts(storeID uint, tableHash string, days int, topK int) ([]TableHistoryProduct, error) {
+	var list []TableHistoryProduct
+	if tableHash == "" {
+		return list, nil
+	}
+	since := time.Now().AddDate(0, 0, -days)
+
+	err := r.db.Table("table_order_items toi").
+		Select("toi.product_id, toi.product_name, toi.category_id, "+
+			"toi.order_count, toi.total_qty, "+
+			"DATEDIFF(NOW(), toi.last_order_at) as last_order_days").
+		Where("toi.store_id = ? AND toi.table_hash = ? AND toi.last_order_at >= ?",
+			storeID, tableHash, since).
+		Order("toi.order_count DESC, last_order_days ASC").
+		Limit(topK).
+		Scan(&list).Error
+
+	if len(list) > 0 {
+		maxCount := 0
+		for _, h := range list {
+			if h.OrderCount > maxCount {
+				maxCount = h.OrderCount
+			}
+		}
+		if maxCount > 0 {
+			for i := range list {
+				freqPart := float64(list[i].OrderCount) / float64(maxCount)
+				recencyPart := 1.0
+				if list[i].LastOrderDays > 0 {
+					recencyPart = 1.0 / math.Log2(float64(list[i].LastOrderDays)+1.0)
+				}
+				if recencyPart > 1 {
+					recencyPart = 1.0
+				}
+				list[i].HistoryScore = 0.6*freqPart + 0.4*recencyPart
+			}
+		}
+	}
+	return list, err
+}
+
+func (r *RecommendRepository) GetTimeRangeHotProducts(storeID uint, hour int, days int, limit int) ([]model.HotProduct, error) {
+	var hots []model.HotProduct
+	since := time.Now().AddDate(0, 0, -days)
+
+	var timeCondition string
+	switch {
+	case hour >= 6 && hour < 10:
+		timeCondition = "HOUR(o.created_at) >= 6 AND HOUR(o.created_at) < 10"
+	case hour >= 10 && hour < 14:
+		timeCondition = "HOUR(o.created_at) >= 10 AND HOUR(o.created_at) < 14"
+	case hour >= 14 && hour < 17:
+		timeCondition = "HOUR(o.created_at) >= 14 AND HOUR(o.created_at) < 17"
+	case hour >= 17 && hour < 21:
+		timeCondition = "HOUR(o.created_at) >= 17 AND HOUR(o.created_at) < 21"
+	case hour >= 21 || hour < 6:
+		timeCondition = "HOUR(o.created_at) >= 21 OR HOUR(o.created_at) < 6"
+	default:
+		timeCondition = "1=1"
+	}
+
+	err := r.db.Table("order_items oi").
+		Select("oi.product_id, p.name as product_name, p.category_id, SUM(oi.quantity) as sold_count").
+		Joins("JOIN orders o ON o.id = oi.order_id").
+		Joins("JOIN products p ON p.id = oi.product_id").
+		Where("o.store_id = ? AND o.order_status IN ? AND o.created_at >= ? AND p.status = 1 AND "+timeCondition,
+			storeID, []int{2, 3, 4}, since).
+		Group("oi.product_id, p.name, p.category_id").
+		Order("sold_count DESC").
+		Limit(limit).
+		Scan(&hots).Error
+
+	if len(hots) > 0 {
+		maxSold := 0
+		for _, h := range hots {
+			if h.SoldCount > maxSold {
+				maxSold = h.SoldCount
+			}
+		}
+		if maxSold > 0 {
+			for i := range hots {
+				hots[i].HotScore = float64(hots[i].SoldCount) / float64(maxSold)
+			}
+		}
+	}
+
+	return hots, err
+}
+
+func (r *RecommendRepository) RecordTableOrderHistory(storeID uint, tableNo string, orderID uint) error {
+	tableHash := model.GenerateTableHash(storeID, tableNo)
+	now := time.Now()
+
+	var order model.Order
+	if err := r.db.Preload("Items").First(&order, orderID).Error; err != nil {
+		return err
+	}
+
+	if order.OrderType != "dine_in" || order.TableNo == "" {
+		return nil
+	}
+
+	tx := r.db.Begin()
+
+	var history model.TableOrderHistory
+	err := tx.Where("store_id = ? AND table_hash = ?", storeID, tableHash).First(&history).Error
+	if err != nil && errors.Is(err, gorm.ErrRecordNotFound) {
+		history = model.TableOrderHistory{
+			StoreID:     storeID,
+			TableHash:   tableHash,
+			VisitCount:  1,
+			LastVisit:   &now,
+			TotalAmount: order.PayAmount,
+		}
+		if err := tx.Create(&history).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
+	} else if err == nil {
+		history.VisitCount++
+		history.LastVisit = &now
+		history.TotalAmount = history.TotalAmount.Add(order.PayAmount)
+		if err := tx.Save(&history).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
+	} else {
+		tx.Rollback()
+		return err
+	}
+
+	for _, item := range order.Items {
+		var historyItem model.TableOrderItem
+		err := tx.Where("store_id = ? AND table_hash = ? AND product_id = ?",
+			storeID, tableHash, item.ProductID).First(&historyItem).Error
+
+		if err != nil && errors.Is(err, gorm.ErrRecordNotFound) {
+			var product model.Product
+			r.db.Select("category_id").First(&product, item.ProductID)
+			historyItem = model.TableOrderItem{
+				HistoryID:   history.ID,
+				StoreID:     storeID,
+				TableHash:   tableHash,
+				ProductID:   item.ProductID,
+				ProductName: item.ProductName,
+				CategoryID:  product.CategoryID,
+				OrderCount:  1,
+				TotalQty:    item.Quantity,
+				TotalAmount: item.Subtotal,
+				LastOrderAt: &now,
+			}
+			if err := tx.Create(&historyItem).Error; err != nil {
+				tx.Rollback()
+				return err
+			}
+		} else if err == nil {
+			historyItem.OrderCount++
+			historyItem.TotalQty += item.Quantity
+			historyItem.TotalAmount = historyItem.TotalAmount.Add(item.Subtotal)
+			historyItem.LastOrderAt = &now
+			if err := tx.Save(&historyItem).Error; err != nil {
+				tx.Rollback()
+				return err
+			}
+		} else {
+			tx.Rollback()
+			return err
+		}
+	}
+
+	tx.Commit()
+	return nil
 }

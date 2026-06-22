@@ -4,6 +4,7 @@ import Taro, { useDidShow, useReachBottom } from '@tarojs/taro'
 import { SearchBar, Loading, Badge, Popup } from '@nutui/nutui-react-taro'
 import { getCategories, getProducts } from '../../services/product'
 import type { Category, Product, SKU, AttributeValue } from '../../services/product'
+import { getScanOrderRecommendations, type RecommendItem } from '../../services/recommend'
 import { useAppStore } from '../../store/app'
 import { useCartStore } from '../../store/cart'
 import styles from './index.module.scss'
@@ -22,8 +23,11 @@ const Index: React.FC = () => {
   const [selectedAttrs, setSelectedAttrs] = useState<Map<number, { id: number; value: string; price: number }>>(new Map())
   const [quantity, setQuantity] = useState(1)
   const [showSkuPopup, setShowSkuPopup] = useState(false)
+  const [recommendItems, setRecommendItems] = useState<RecommendItem[]>([])
+  const [recommendLoading, setRecommendLoading] = useState(false)
 
   const currentStore = useAppStore(state => state.currentStore)
+  const tableNo = useCartStore(state => state.tableNo)
   const cartItems = useCartStore(state => state.items)
   const totalAmount = useCartStore(state => state.total())
   const itemCount = useCartStore(state => state.itemCount())
@@ -61,14 +65,39 @@ const Index: React.FC = () => {
     }
   }, [])
 
+  const loadRecommendations = useCallback(async (storeId: number, tableNumber: string) => {
+    if (!storeId || !tableNumber) {
+      setRecommendItems([])
+      return
+    }
+    setRecommendLoading(true)
+    try {
+      const result = await getScanOrderRecommendations(storeId, tableNumber, 4)
+      setRecommendItems(result.items || [])
+    } catch (e) {
+      setRecommendItems([])
+    } finally {
+      setRecommendLoading(false)
+    }
+  }, [])
+
   useDidShow(() => {
     if (currentStore) {
       loadCategories(currentStore.id)
       loadProducts(currentStore.id, activeCategory, 1)
+      if (tableNo) {
+        loadRecommendations(currentStore.id, tableNo)
+      }
     } else {
       Taro.navigateTo({ url: '/pages/store/select' })
     }
   })
+
+  useEffect(() => {
+    if (currentStore && tableNo) {
+      loadRecommendations(currentStore.id, tableNo)
+    }
+  }, [currentStore, tableNo, loadRecommendations])
 
   useEffect(() => {
     if (currentStore && activeCategory !== null) {
@@ -112,6 +141,53 @@ const Index: React.FC = () => {
       setSelectedAttrs(new Map())
       setQuantity(1)
       setShowSkuPopup(true)
+    }
+  }
+
+  const handleRecommendAddClick = (e: React.MouseEvent, item: RecommendItem) => {
+    e.stopPropagation()
+    
+    const product = products.find(p => p.id === item.product_id)
+    if (!product) {
+      Taro.showToast({ title: '商品信息获取失败', icon: 'none' })
+      return
+    }
+    
+    const sku = product.skus.find(s => s.id === item.sku_id)
+    if (!sku || sku.status !== 1 || sku.is_sold_out || sku.stock <= 0) {
+      const availableSkus = product.skus.filter(s => s.status === 1 && !s.is_sold_out)
+      if (availableSkus.length === 0) {
+        Taro.showToast({ title: '该商品已沽清', icon: 'none' })
+        return
+      }
+      handleAddClick(e, product)
+      return
+    }
+    
+    const availableAttrs = product.attributes.filter(a => a.status === 1 && a.values.some(v => v.status === 1))
+    if (availableAttrs.length === 0) {
+      const attrs: { attr_id: number; attr_name: string; value: AttributeValue }[] = []
+      addItem(product, sku, attrs, 1)
+      Taro.showToast({ title: '已加入购物车', icon: 'success' })
+    } else {
+      setSelectedProduct(product)
+      setSelectedSku(sku)
+      setSelectedAttrs(new Map())
+      setQuantity(1)
+      setShowSkuPopup(true)
+    }
+  }
+
+  const getReasonTagStyle = (reasonType: string) => {
+    switch (reasonType) {
+      case 'table_history':
+        return styles.reasonTagHistory
+      case 'time_hot':
+        return styles.reasonTagTime
+      case 'hot':
+        return styles.reasonTagHot
+      default:
+        return styles.reasonTagDefault
     }
   }
 
@@ -218,6 +294,44 @@ const Index: React.FC = () => {
           <Text className={styles.voiceIcon}>🎤</Text>
         </View>
       </View>
+
+      {recommendItems.length > 0 && (
+        <View className={styles.recommendSection}>
+          <View className={styles.recommendHeader}>
+            <Text className={styles.recommendTitle}>✨ 为你推荐</Text>
+            {tableNo && <Text className={styles.recommendSubtitle}>（{tableNo}号桌专属）</Text>}
+          </View>
+          <ScrollView scrollX className={styles.recommendScroll}>
+            <View className={styles.recommendList}>
+              {recommendItems.map(item => (
+                <View key={item.product_id} className={styles.recommendCard}>
+                  <View className={styles.recommendImageWrap}>
+                    <Image
+                      className={styles.recommendImage}
+                      src={item.main_image || 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=delicious%20food%20dish&image_size=square'}
+                    />
+                    <View className={`${styles.reasonTag} ${getReasonTagStyle(item.reason_type)}`}>
+                      <Text className={styles.reasonTagText}>{item.reason}</Text>
+                    </View>
+                  </View>
+                  <View className={styles.recommendInfo}>
+                    <Text className={styles.recommendName} numberOfLines={1}>{item.product_name}</Text>
+                    <View className={styles.recommendFooter}>
+                      <View className={styles.recommendPrice}>
+                        <Text className={styles.priceSymbol}>¥</Text>
+                        <Text className={styles.priceValue}>{item.price}</Text>
+                      </View>
+                      <View className={styles.recommendAddBtn} onClick={(e) => handleRecommendAddClick(e, item)}>
+                        <Text className={styles.recommendAddText}>+</Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </ScrollView>
+        </View>
+      )}
 
       <View className={styles.content}>
         <ScrollView scrollY className={styles.categorySidebar}>

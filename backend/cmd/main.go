@@ -106,6 +106,10 @@ func main() {
 		&model.TransferOrder{},
 		&model.TransferOrderItem{},
 		&model.TransferLogistics{},
+
+		&model.TableOrderHistory{},
+		&model.TableOrderItem{},
+		&model.ProductRecommendScore{},
 	)
 
 	initDefaultData()

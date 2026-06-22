@@ -329,6 +329,7 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 
 		recommendations := api.Group("/recommendations")
 		{
+			recommendations.GET("/scan-order", recommendHandler.GetScanOrderRecommendations)
 			recommendations.GET("/cart", recommendHandler.GetCartRecommendations)
 			recommendations.GET("/config/meta", middleware.JWTAuth(), recommendHandler.GetConfigMeta)
 			recommendations.GET("/config", middleware.JWTAuth(), recommendHandler.GetConfig)

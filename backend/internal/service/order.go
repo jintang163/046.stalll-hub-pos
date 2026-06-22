@@ -390,6 +390,15 @@ func (s *OrderService) UpdateStatus(id uint, status int) error {
 		}
 	}
 
+	if status == 4 && order.OrderType == "dine_in" && order.TableNo != "" {
+		recommendService := NewRecommendService()
+		go func() {
+			if err := recommendService.RecordTableHistory(order.StoreID, order.TableNo, order.ID); err != nil {
+				log.Printf("record table history failed for order %d: %v", order.ID, err)
+			}
+		}()
+	}
+
 	return nil
 }
 

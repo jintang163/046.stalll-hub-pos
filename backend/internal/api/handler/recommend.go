@@ -6,6 +6,7 @@ import (
 	"stalll-hub-pos/backend/internal/dto"
 	"stalll-hub-pos/backend/internal/middleware"
 	"stalll-hub-pos/backend/internal/service"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v4"
@@ -167,4 +168,46 @@ func (h *RecommendHandler) GetCartRecommendations(c *gin.Context) {
 		return
 	}
 	middleware.Success(c, list)
+}
+
+func (h *RecommendHandler) GetScanOrderRecommendations(c *gin.Context) {
+	storeIDStr := c.Query("store_id")
+	tableNo := c.Query("table_no")
+	countStr := c.Query("count")
+
+	if storeIDStr == "" {
+		middleware.Error(c, "缺少门店ID")
+		return
+	}
+	if tableNo == "" {
+		middleware.Error(c, "缺少桌号")
+		return
+	}
+
+	storeID64, err := strconv.ParseUint(storeIDStr, 10, 32)
+	if err != nil {
+		middleware.Error(c, "门店ID格式错误")
+		return
+	}
+	storeID := uint(storeID64)
+
+	count := 4
+	if countStr != "" {
+		if cnt, err := strconv.Atoi(countStr); err == nil && cnt > 0 && cnt <= 10 {
+			count = cnt
+		}
+	}
+
+	list, err := h.recommendService.GetScanOrderRecommendations(storeID, tableNo, count)
+	if err != nil {
+		middleware.Error(c, "获取推荐失败: "+err.Error())
+		return
+	}
+	middleware.Success(c, gin.H{
+		"items":     list,
+		"table_no":  tableNo,
+		"store_id":  storeID,
+		"count":     len(list),
+		"timestamp": time.Now().Unix(),
+	})
 }

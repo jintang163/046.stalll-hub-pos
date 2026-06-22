@@ -849,3 +849,205 @@ func (s *RecommendService) clearRecommendCache(storeID uint) {
 		cursor = next
 	}
 }
+
+func (s *RecommendService) RecordTableHistory(storeID uint, tableNo string, orderID uint) error {
+	return s.recRepo.RecordTableOrderHistory(storeID, tableNo, orderID)
+}
+
+func (s *RecommendService) GetScanOrderRecommendations(storeID uint, tableNo string, count int) ([]dto.RecommendItemDTO, error) {
+	cfg, err := s.GetOrCreateConfig(storeID)
+	if err != nil {
+		return nil, err
+	}
+
+	if count <= 0 {
+		count = 4
+	}
+	if count > 10 {
+		count = 10
+	}
+
+	tableHash := model.GenerateTableHash(storeID, tableNo)
+	currentHour := time.Now().Hour()
+
+	cacheKey := fmt.Sprintf("%sscan:%d:%s:%d:%d", redisRecommendKeyPrefix, storeID, tableHash, currentHour, count)
+	if cached, err := s.getRecommendFromCache(cacheKey); err == nil && len(cached) > 0 {
+		return cached, nil
+	}
+
+	tableHistoryProducts, err := s.recRepo.GetTableHistoryProducts(storeID, tableHash, cfg.UserHistoryDays, cfg.UserHistoryTopK)
+	if err != nil {
+		log.Printf("[Recommend] 获取桌号历史失败: %v", err)
+		tableHistoryProducts = []repository.TableHistoryProduct{}
+	}
+
+	timeHotProducts, err := s.recRepo.GetTimeRangeHotProducts(storeID, currentHour, cfg.HotDays, count*3)
+	if err != nil {
+		log.Printf("[Recommend] 获取时段热门失败: %v", err)
+		timeHotProducts = []model.HotProduct{}
+	}
+
+	allHotProducts, err := s.recRepo.GetHotProducts(storeID, cfg.HotDays, count*3)
+	if err != nil {
+		log.Printf("[Recommend] 获取全店热门失败: %v", err)
+		allHotProducts = []model.HotProduct{}
+	}
+
+	historyWeight := 0.35
+	timeWeight := 0.35
+	hotWeight := 0.30
+
+	type scoredItem struct {
+		ProductID   uint
+		ProductName string
+		CategoryID  uint
+		Score       float64
+		Reason      string
+		ReasonType  string
+	}
+
+	scoreMap := make(map[uint]*scoredItem)
+
+	for _, h := range tableHistoryProducts {
+		score := h.HistoryScore * historyWeight
+		scoreMap[h.ProductID] = &scoredItem{
+			ProductID:   h.ProductID,
+			ProductName: h.ProductName,
+			CategoryID:  h.CategoryID,
+			Score:       score,
+			Reason:      "该桌常点",
+			ReasonType:  "table_history",
+		}
+	}
+
+	for _, h := range timeHotProducts {
+		score := h.HotScore * timeWeight
+		if existing, ok := scoreMap[h.ProductID]; ok {
+			existing.Score += score
+			if h.HotScore*timeWeight > existing.Score*0.5 {
+				existing.Reason = "这个时段大家都爱吃"
+				existing.ReasonType = "time_hot"
+			}
+		} else {
+			scoreMap[h.ProductID] = &scoredItem{
+				ProductID:   h.ProductID,
+				ProductName: h.ProductName,
+				CategoryID:  h.CategoryID,
+				Score:       score,
+				Reason:      "这个时段大家都爱吃",
+				ReasonType:  "time_hot",
+			}
+		}
+	}
+
+	for _, h := range allHotProducts {
+		score := h.HotScore * hotWeight
+		if existing, ok := scoreMap[h.ProductID]; ok {
+			existing.Score += score
+		} else {
+			scoreMap[h.ProductID] = &scoredItem{
+				ProductID:   h.ProductID,
+				ProductName: h.ProductName,
+				CategoryID:  h.CategoryID,
+				Score:       score,
+				Reason:      "热门推荐",
+				ReasonType:  "hot",
+			}
+		}
+	}
+
+	scoredList := make([]*scoredItem, 0, len(scoreMap))
+	for _, item := range scoreMap {
+		scoredList = append(scoredList, item)
+	}
+
+	sort.Slice(scoredList, func(i, j int) bool {
+		return scoredList[i].Score > scoredList[j].Score
+	})
+
+	selected := make([]*scoredItem, 0, count)
+	categoryUsed := make(map[uint]int)
+	for _, item := range scoredList {
+		if len(selected) >= count {
+			break
+		}
+		catCount := categoryUsed[item.CategoryID]
+		boost := 1.0 / math.Pow(float64(catCount+1), 0.5)
+		item.Score *= boost
+
+		if len(selected) < 2 || catCount == 0 {
+			selected = append(selected, item)
+			categoryUsed[item.CategoryID]++
+		}
+	}
+
+	if len(selected) < count {
+		for _, item := range scoredList {
+			if len(selected) >= count {
+				break
+			}
+			exists := false
+			for _, s := range selected {
+				if s.ProductID == item.ProductID {
+					exists = true
+					break
+				}
+			}
+			if !exists {
+				selected = append(selected, item)
+			}
+		}
+	}
+
+	productIDs := make([]uint, len(selected))
+	for i, item := range selected {
+		productIDs[i] = item.ProductID
+	}
+
+	products, err := s.productRepo.GetByIDs(productIDs)
+	if err != nil {
+		return []dto.RecommendItemDTO{}, err
+	}
+
+	productMap := make(map[uint]*model.Product)
+	for i := range products {
+		productMap[products[i].ID] = &products[i]
+	}
+
+	result := make([]dto.RecommendItemDTO, 0, len(selected))
+	for _, item := range selected {
+		product, ok := productMap[item.ProductID]
+		if !ok || product.Status != 1 {
+			continue
+		}
+		price := decimal.Zero
+		skuID := uint(0)
+		if len(product.SKUs) > 0 {
+			for _, sku := range product.SKUs {
+				if sku.Status == 1 && !sku.IsSoldOut {
+					price = sku.Price
+					skuID = sku.ID
+					break
+				}
+			}
+		}
+		result = append(result, dto.RecommendItemDTO{
+			ProductID:   item.ProductID,
+			ProductName: item.ProductName,
+			CategoryID:  item.CategoryID,
+			MainImage:   product.MainImage,
+			SKUID:       skuID,
+			Price:       price.String(),
+			Score:       item.Score,
+			Reason:      item.Reason,
+			ReasonType:  item.ReasonType,
+		})
+	}
+
+	s.setRecommendCache(cacheKey, result)
+
+	log.Printf("[Recommend] 扫码点餐推荐: 门店=%d, 桌号=%s, 桌号历史=%d, 时段热门=%d, 返回结果=%d",
+		storeID, tableNo, len(tableHistoryProducts), len(timeHotProducts), len(result))
+
+	return result, nil
+}
