@@ -50,6 +50,7 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 	purchaseV2Handler := handler.NewPurchaseOrderV2Handler()
 	purchaseReceiveHandler := handler.NewPurchaseReceiveHandler()
 	payableHandler := handler.NewAccountsPayableHandler()
+	receiptAdHandler := handler.NewReceiptAdHandler()
 
 	orderHandler := handler.NewOrderHandler(nil)
 
@@ -710,6 +711,20 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 			reconciliations.GET("/:id", payableHandler.GetReconciliation)
 			reconciliations.POST("/:id/confirm", payableHandler.ConfirmReconciliation)
 			reconciliations.POST("/:id/supplier-amount", payableHandler.InputSupplierAmount)
+		}
+
+		receiptAds := api.Group("/receipt-ads")
+		receiptAds.Use(middleware.JWTAuth())
+		{
+			receiptAds.POST("", receiptAdHandler.Create)
+			receiptAds.GET("", receiptAdHandler.List)
+			receiptAds.GET("/active", receiptAdHandler.GetActiveAds)
+			receiptAds.GET("/stats", receiptAdHandler.GetStats)
+			receiptAds.GET("/:id", receiptAdHandler.Get)
+			receiptAds.PUT("/:id", receiptAdHandler.Update)
+			receiptAds.DELETE("/:id", receiptAdHandler.Delete)
+			receiptAds.PUT("/:id/status", receiptAdHandler.UpdateStatus)
+			receiptAds.POST("/clicks", receiptAdHandler.RecordClick)
 		}
 	}
 

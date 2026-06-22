@@ -115,6 +115,9 @@ func main() {
 		&model.Reconciliation{},
 		&model.ReconciliationItem{},
 
+		&model.ReceiptAd{},
+		&model.ReceiptAdClick{},
+
 		&model.TableOrderHistory{},
 		&model.TableOrderItem{},
 		&model.ProductRecommendScore{},

@@ -81,6 +81,12 @@ const routes = [
         meta: { title: '短信任务', icon: 'List' }
       },
       {
+        path: 'receipt-ads',
+        name: 'ReceiptAds',
+        component: () => import('@/views/receipt-ads/index.vue'),
+        meta: { title: '小票广告', icon: 'Promotion' }
+      },
+      {
         path: 'time-slot-pricing',
         name: 'TimeSlotPricing',
         component: () => import('@/views/time-slot-pricing/index.vue'),

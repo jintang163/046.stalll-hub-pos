@@ -205,6 +205,58 @@ CREATE TABLE IF NOT EXISTS reconciliation_items (
     INDEX idx_business_no (business_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- 小票广告位表
+CREATE TABLE IF NOT EXISTS receipt_ads (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    store_id BIGINT UNSIGNED NOT NULL,
+    title VARCHAR(100) NOT NULL,
+    ad_type VARCHAR(20) DEFAULT 'image',
+    image_url VARCHAR(255),
+    qr_code_content VARCHAR(500),
+    link_url VARCHAR(255),
+    content VARCHAR(500),
+    subtitle VARCHAR(100),
+    position VARCHAR(20) DEFAULT 'footer',
+    sort_order INT DEFAULT 0,
+    status INT DEFAULT 1,
+    view_count INT DEFAULT 0,
+    click_count INT DEFAULT 0,
+    start_date VARCHAR(10),
+    end_date VARCHAR(10),
+    start_time VARCHAR(5),
+    end_time VARCHAR(5),
+    remark VARCHAR(255),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at DATETIME,
+    INDEX idx_store_id (store_id),
+    INDEX idx_position (position),
+    INDEX idx_status (status),
+    INDEX idx_sort_order (sort_order),
+    INDEX idx_start_date (start_date),
+    INDEX idx_end_date (end_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 小票广告点击统计表
+CREATE TABLE IF NOT EXISTS receipt_ad_clicks (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    store_id BIGINT UNSIGNED NOT NULL,
+    ad_id BIGINT UNSIGNED NOT NULL,
+    order_id BIGINT UNSIGNED,
+    order_no VARCHAR(50),
+    click_type VARCHAR(20) DEFAULT 'scan',
+    ip VARCHAR(50),
+    user_agent VARCHAR(255),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at DATETIME,
+    INDEX idx_store_id (store_id),
+    INDEX idx_ad_id (ad_id),
+    INDEX idx_order_id (order_id),
+    INDEX idx_order_no (order_no),
+    INDEX idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- 给采购订单表增加新字段（如果已存在则忽略错误）
 -- ALTER TABLE purchase_orders ADD COLUMN supplier_id BIGINT UNSIGNED AFTER store_id;
 -- ALTER TABLE purchase_orders ADD COLUMN received_amount DECIMAL(12,2) DEFAULT 0 AFTER total_amount;

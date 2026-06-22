@@ -8,6 +8,7 @@ import (
 	"stalll-hub-pos/backend/internal/consumer/escpos"
 	"stalll-hub-pos/backend/internal/model"
 	"stalll-hub-pos/backend/internal/repository"
+	"stalll-hub-pos/backend/internal/service"
 	"stalll-hub-pos/backend/pkg/database"
 	"stalll-hub-pos/backend/pkg/nsq"
 
@@ -15,16 +16,18 @@ import (
 )
 
 type PrintConsumer struct {
-	printerRepo *repository.PrinterRepository
-	storeRepo   *repository.StoreRepository
-	orderRepo   *repository.OrderRepository
+	printerRepo   *repository.PrinterRepository
+	storeRepo     *repository.StoreRepository
+	orderRepo     *repository.OrderRepository
+	receiptAdSvc  *service.ReceiptAdService
 }
 
 func NewPrintConsumer() *PrintConsumer {
 	return &PrintConsumer{
-		printerRepo: repository.NewPrinterRepository(database.DB),
-		storeRepo:   repository.NewStoreRepository(database.DB),
-		orderRepo:   repository.NewOrderRepository(database.DB),
+		printerRepo:  repository.NewPrinterRepository(database.DB),
+		storeRepo:    repository.NewStoreRepository(database.DB),
+		orderRepo:    repository.NewOrderRepository(database.DB),
+		receiptAdSvc: service.NewReceiptAdService(),
 	}
 }
 
@@ -236,9 +239,87 @@ func (c *PrintConsumer) generateReceiptPrint(storeName string, data *OrderPrintD
 		printer.PrintLine(fmt.Sprintf("赠送积分: %d", data.PointsEarned))
 	}
 
+	c.appendReceiptAds(printer, data.StoreID)
+
 	printer.PrintFooter("欢迎下次光临")
 
 	return printer.Bytes(), nil
+}
+
+func (c *PrintConsumer) appendReceiptAds(printer *escpos.Printer, storeID uint) {
+	ads, err := c.receiptAdSvc.GetActiveAds(storeID, "footer")
+	if err != nil || len(ads) == 0 {
+		return
+	}
+
+	for _, ad := range ads {
+		printer.Feed(1)
+		printer.PrintSeparator()
+
+		switch ad.AdType {
+		case "qrcode":
+			if ad.Title != "" {
+				printer.SetAlign("center")
+				printer.SetTextBold(true)
+				printer.PrintLine(ad.Title)
+				printer.SetTextBold(false)
+				printer.SetAlign("left")
+			}
+			if ad.Subtitle != "" {
+				printer.SetAlign("center")
+				printer.PrintLine(ad.Subtitle)
+				printer.SetAlign("left")
+			}
+			if ad.QRCodeContent != "" {
+				printer.SetAlign("center")
+				printer.PrintQRCode(ad.QRCodeContent, 8)
+				printer.SetAlign("left")
+			}
+			if ad.Content != "" {
+				printer.SetAlign("center")
+				printer.PrintLine(ad.Content)
+				printer.SetAlign("left")
+			}
+		case "image":
+			if ad.Title != "" {
+				printer.SetAlign("center")
+				printer.SetTextBold(true)
+				printer.PrintLine(ad.Title)
+				printer.SetTextBold(false)
+				printer.SetAlign("left")
+			}
+			if ad.Content != "" {
+				printer.SetAlign("center")
+				printer.PrintLine(ad.Content)
+				printer.SetAlign("left")
+			}
+			if ad.Subtitle != "" {
+				printer.SetAlign("center")
+				printer.PrintLine(ad.Subtitle)
+				printer.SetAlign("left")
+			}
+		default:
+			if ad.Title != "" {
+				printer.SetAlign("center")
+				printer.SetTextBold(true)
+				printer.PrintLine(ad.Title)
+				printer.SetTextBold(false)
+				printer.SetAlign("left")
+			}
+			if ad.Content != "" {
+				printer.SetAlign("center")
+				printer.PrintLine(ad.Content)
+				printer.SetAlign("left")
+			}
+			if ad.Subtitle != "" {
+				printer.SetAlign("center")
+				printer.PrintLine(ad.Subtitle)
+				printer.SetAlign("left")
+			}
+		}
+
+		go c.receiptAdSvc.IncrementViewCount(ad.ID)
+	}
 }
 
 func (c *PrintConsumer) printToNetworkPrinter(printer model.Printer, data []byte) error {
