@@ -7,12 +7,13 @@ import (
 )
 
 const (
-	TransferStatusPending   = 0
-	TransferStatusOutConfirmed = 1
-	TransferStatusInTransit = 2
-	TransferStatusReceived  = 3
-	TransferStatusCompleted = 4
-	TransferStatusCancelled = 5
+	TransferStatusPendingAccept  = 0
+	TransferStatusPendingOut   = 1
+	TransferStatusOutConfirmed = 2
+	TransferStatusInTransit = 3
+	TransferStatusReceived  = 4
+	TransferStatusCompleted = 5
+	TransferStatusCancelled = 6
 )
 
 type TransferOrder struct {
@@ -28,6 +29,9 @@ type TransferOrder struct {
 	OutOperatorID   uint              `json:"out_operator_id"`
 	OutOperatorName string            `gorm:"size:50" json:"out_operator_name"`
 	OutConfirmedAt  *time.Time        `json:"out_confirmed_at"`
+	AcceptOperatorID   uint            `json:"accept_operator_id"`
+	AcceptOperatorName string          `gorm:"size:50" json:"accept_operator_name"`
+	AcceptedAt      *time.Time          `json:"accepted_at"`
 	InOperatorID    uint              `json:"in_operator_id"`
 	InOperatorName  string            `gorm:"size:50" json:"in_operator_name"`
 	ReceivedAt      *time.Time        `json:"received_at"`

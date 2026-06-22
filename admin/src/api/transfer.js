@@ -23,6 +23,22 @@ export function createTransfer(data) {
   })
 }
 
+export function acceptTransfer(id, data) {
+  return request({
+    url: `/transfers/${id}/accept`,
+    method: 'post',
+    data
+  })
+}
+
+export function rejectTransfer(id, data) {
+  return request({
+    url: `/transfers/${id}/reject`,
+    method: 'post',
+    data
+  })
+}
+
 export function confirmOutbound(id, data) {
   return request({
     url: `/transfers/${id}/confirm-outbound`,
@@ -67,6 +83,13 @@ export function getLogisticsTrack(id) {
   return request({
     url: `/transfers/${id}/logistics`,
     method: 'get'
+  })
+}
+
+export function refreshLogistics(id) {
+  return request({
+    url: `/transfers/${id}/logistics/refresh`,
+    method: 'post'
   })
 }
 

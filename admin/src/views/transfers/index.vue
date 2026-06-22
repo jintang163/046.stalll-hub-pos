@@ -25,12 +25,13 @@
         <el-form-item label="状态">
           <el-select v-model="searchForm.status" placeholder="全部" style="width: 130px">
             <el-option label="全部" :value="-1" />
-            <el-option label="待出库" :value="0" />
-            <el-option label="已出库" :value="1" />
-            <el-option label="运输中" :value="2" />
-            <el-option label="已收货" :value="3" />
-            <el-option label="已完成" :value="4" />
-            <el-option label="已取消" :value="5" />
+            <el-option label="待接单" :value="0" />
+            <el-option label="待出库" :value="1" />
+            <el-option label="已出库" :value="2" />
+            <el-option label="运输中" :value="3" />
+            <el-option label="已收货" :value="4" />
+            <el-option label="已完成" :value="5" />
+            <el-option label="已取消" :value="6" />
           </el-select>
         </el-form-item>
         <el-form-item label="调拨单号">
@@ -58,7 +59,7 @@
         </el-table-column>
         <el-table-column prop="total_qty" label="总数量" width="100">
           <template #default="{ row }">
-            {{ row.total_qty }}
+          {{ row.total_qty }}
           </template>
         </el-table-column>
         <el-table-column prop="total_amount" label="总金额" width="120">
@@ -84,15 +85,17 @@
           </template>
         </el-table-column>
         <el-table-column prop="created_at" label="创建时间" width="160" />
-        <el-table-column label="操作" width="280" fixed="right">
+        <el-table-column label="操作" width="340" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="viewDetail(row)">详情</el-button>
             <el-button link type="primary" @click="viewLogistics(row)" v-if="row.tracking_no">物流</el-button>
-            <el-button link type="primary" @click="handleOutbound(row)" v-if="row.status === 0">出库</el-button>
-            <el-button link type="primary" @click="handleShip(row)" v-if="row.status === 1">发货</el-button>
-            <el-button link type="primary" @click="handleReceive(row)" v-if="row.status === 1 || row.status === 2">收货</el-button>
-            <el-button link type="primary" @click="handleComplete(row)" v-if="row.status === 3">完成</el-button>
-            <el-button link type="danger" @click="handleCancel(row)" v-if="row.status === 0">取消</el-button>
+            <el-button link type="success" @click="handleAccept(row)" v-if="row.status === 0">接单</el-button>
+            <el-button link type="danger" @click="handleReject(row)" v-if="row.status === 0">拒单</el-button>
+            <el-button link type="primary" @click="handleOutbound(row)" v-if="row.status === 1">出库</el-button>
+            <el-button link type="primary" @click="handleShip(row)" v-if="row.status === 2">发货</el-button>
+            <el-button link type="primary" @click="handleReceive(row)" v-if="row.status === 2 || row.status === 3">收货</el-button>
+            <el-button link type="primary" @click="handleComplete(row)" v-if="row.status === 4">完成</el-button>
+            <el-button link type="danger" @click="handleCancel(row)" v-if="row.status === 0 || row.status === 1">取消</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -229,9 +232,19 @@
           <el-descriptions-item label="总数量">{{ currentDetail.total_qty }}</el-descriptions-item>
           <el-descriptions-item label="总金额">¥{{ currentDetail.total_amount }}</el-descriptions-item>
           <el-descriptions-item label="创建时间">{{ currentDetail.created_at }}</el-descriptions-item>
+          <el-descriptions-item label="接单时间">{{ currentDetail.accepted_at || '-' }}</el-descriptions-item>
           <el-descriptions-item label="出库时间">{{ currentDetail.out_confirmed_at || '-' }}</el-descriptions-item>
           <el-descriptions-item label="收货时间">{{ currentDetail.received_at || '-' }}</el-descriptions-item>
           <el-descriptions-item label="完成时间">{{ currentDetail.completed_at || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="接单人" v-if="currentDetail.accept_operator_name">
+            {{ currentDetail.accept_operator_name }}
+          </el-descriptions-item>
+          <el-descriptions-item label="出库人" v-if="currentDetail.out_operator_name">
+            {{ currentDetail.out_operator_name }}
+          </el-descriptions-item>
+          <el-descriptions-item label="收货人" v-if="currentDetail.in_operator_name">
+            {{ currentDetail.in_operator_name }}
+          </el-descriptions-item>
           <el-descriptions-item label="物流公司" v-if="currentDetail.logistics_company">
             {{ currentDetail.logistics_company }}
           </el-descriptions-item>
@@ -277,15 +290,15 @@
       <div v-if="logisticsData" class="logistics-tracking">
         <div class="logistics-header">
           <span>运单号：{{ logisticsData.tracking_no }}</span>
-          <el-tag type="primary">{{ logisticsData.status || '查询中...' }}</el-tag>
+          <el-button size="small" type="primary" link @click="handleRefreshLogistics">刷新</el-button>
         </div>
         <el-timeline v-if="logisticsData.tracks && logisticsData.tracks.length > 0">
           <el-timeline-item
             v-for="(track, index) in logisticsData.tracks"
             :key="index"
-            :timestamp="track.accept_time"
+            :timestamp="formatTrackTime(track)"
             :type="index === 0 ? 'primary' : ''">
-            {{ track.accept_station }}
+            {{ track.description || track.accept_station }}
             <div v-if="track.location" style="font-size: 12px; color: #909399; margin-top: 4px">
               {{ track.location }}
             </div>
@@ -473,12 +486,13 @@ function handleReset() {
 
 function getStatusText(status) {
   const map = {
-    0: '待出库',
-    1: '已出库',
-    2: '运输中',
-    3: '已收货',
-    4: '已完成',
-    5: '已取消'
+    0: '待接单',
+    1: '待出库',
+    2: '已出库',
+    3: '运输中',
+    4: '已收货',
+    5: '已完成',
+    6: '已取消'
   }
   return map[status] || '未知'
 }
@@ -486,13 +500,20 @@ function getStatusText(status) {
 function getStatusType(status) {
   const map = {
     0: 'warning',
-    1: 'primary',
-    2: 'info',
-    3: 'success',
+    1: 'info',
+    2: 'primary',
+    3: 'info',
     4: 'success',
-    5: 'info'
+    5: 'success',
+    6: 'info'
   }
   return map[status] || 'info'
+}
+
+function formatTrackTime(track) {
+  if (track.track_time) return track.track_time
+  if (track.accept_time) return track.accept_time
+  return ''
 }
 
 function handleCreate() {
@@ -593,6 +614,48 @@ function viewLogistics(row) {
   })
 }
 
+function handleRefreshLogistics() {
+  if (!logisticsData.value?.tracking_no) return
+  transferApi.refreshLogistics(logisticsData.value.transfer_id || currentDetail.value?.id).then(res => {
+    logisticsData.value = {
+      ...logisticsData.value,
+      tracks: res.data
+    }
+    ElMessage.success('刷新成功')
+  }).catch(err => {
+    ElMessage.error(err.message || '刷新失败')
+  })
+}
+
+function handleAccept(row) {
+  ElMessageBox.confirm('确认接单吗？接单后请及时安排出库。', '确认接单', {
+    type: 'info'
+  }).then(() => {
+    transferApi.acceptTransfer(row.id, {}).then(() => {
+      ElMessage.success('接单成功')
+      fetchList()
+    }).catch(err => {
+      ElMessage.error(err.message || '接单失败')
+    })
+  }).catch(() => {})
+}
+
+function handleReject(row) {
+  ElMessageBox.prompt('请输入拒单原因', '拒单', {
+    confirmButtonText: '确认拒单',
+    cancelButtonText: '取消',
+    inputPlaceholder: '请输入拒单原因',
+    type: 'warning'
+  }).then(({ value }) => {
+    transferApi.rejectTransfer(row.id, { reason: value || '' }).then(() => {
+      ElMessage.success('已拒单')
+      fetchList()
+    }).catch(err => {
+      ElMessage.error(err.message || '拒单失败')
+    })
+  }).catch(() => {})
+}
+
 function handleOutbound(row) {
   ElMessageBox.confirm('确认出库吗？出库后库存将从调出门店扣除。', '确认出库', {
     type: 'warning'
@@ -603,7 +666,7 @@ function handleOutbound(row) {
     }).catch(err => {
       ElMessage.error(err.message || '出库失败')
     })
-  })
+  }).catch(() => {})
 }
 
 function handleShip(row) {
@@ -665,7 +728,7 @@ function submitReceive() {
     fetchList()
   }).catch(err => {
     ElMessage.error(err.message || '收货失败')
-  })
+    })
 }
 
 function handleComplete(row) {

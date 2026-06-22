@@ -637,12 +637,15 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 			transfers.GET("", transferHandler.ListTransfers)
 			transfers.GET("/:id", transferHandler.GetTransfer)
 			transfers.GET("/:id/items", transferHandler.GetTransferItems)
+			transfers.POST("/:id/accept", transferHandler.AcceptTransfer)
+			transfers.POST("/:id/reject", transferHandler.RejectTransfer)
 			transfers.POST("/:id/confirm-outbound", transferHandler.ConfirmOutbound)
 			transfers.POST("/:id/ship", transferHandler.StartShipping)
 			transfers.POST("/:id/receive", transferHandler.ReceiveTransfer)
 			transfers.POST("/:id/complete", transferHandler.CompleteTransfer)
 			transfers.POST("/:id/cancel", transferHandler.CancelTransfer)
 			transfers.GET("/:id/logistics", transferHandler.GetLogisticsTrack)
+			transfers.POST("/:id/logistics/refresh", transferHandler.RefreshLogistics)
 		}
 	}
 

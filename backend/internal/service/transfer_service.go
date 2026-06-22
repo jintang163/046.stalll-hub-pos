@@ -13,12 +13,14 @@ import (
 )
 
 type TransferService struct {
-	dingTalk *DingTalkService
+	dingTalk   *DingTalkService
+	kdnService *KuaiDiNiaoService
 }
 
 func NewTransferService() *TransferService {
 	return &TransferService{
-		dingTalk: NewDingTalkService(),
+		dingTalk:   NewDingTalkService(),
+		kdnService: NewKuaiDiNiaoService(),
 	}
 }
 
@@ -44,7 +46,7 @@ func (s *TransferService) CreateTransfer(req *dto.CreateTransferOrderDTO) (*mode
 		TransferNo:      transferNo,
 		FromStoreID:     req.FromStoreID,
 		ToStoreID:       req.ToStoreID,
-		Status:          model.TransferStatusPending,
+		Status:          model.TransferStatusPendingAccept,
 		TotalQty:        totalQty,
 		TotalAmount:     totalAmount,
 		TransferType:    req.TransferType,
@@ -65,7 +67,7 @@ func (s *TransferService) CreateTransfer(req *dto.CreateTransferOrderDTO) (*mode
 
 	for _, item := range req.Items {
 		var ingredient model.Ingredient
-		if err := tx.First(&ingredient, item.IngredientID).Error; err != nil {
+		if err := tx.Where("id = ? AND store_id = ?", item.IngredientID, req.FromStoreID).First(&ingredient).Error; err != nil {
 			tx.Rollback()
 			return nil, fmt.Errorf("食材不存在: %d", item.IngredientID)
 		}
@@ -95,6 +97,8 @@ func (s *TransferService) CreateTransfer(req *dto.CreateTransferOrderDTO) (*mode
 
 	tx.Commit()
 	transfer.Items, _ = s.getItems(transfer.ID)
+
+	go s.dingTalk.SendText(fmt.Sprintf("收到新的调拨单[%s]，请及时确认接单", transfer.TransferNo), false, nil)
 
 	return transfer, nil
 }
@@ -158,13 +162,48 @@ func (s *TransferService) ListTransfers(query *dto.TransferOrderQueryDTO) ([]mod
 	return list, total, err
 }
 
-func (s *TransferService) ConfirmOutbound(id uint, operatorID uint, operatorName string, remark string) (*model.TransferOrder, error) {
+func (s *TransferService) AcceptTransfer(id uint, operatorID uint, operatorName string, storeID uint) (*model.TransferOrder, error) {
 	var transfer model.TransferOrder
 	if err := database.DB.First(&transfer, id).Error; err != nil {
 		return nil, errors.New("调拨单不存在")
 	}
 
-	if transfer.Status != model.TransferStatusPending {
+	if transfer.ToStoreID != storeID {
+		return nil, errors.New("只有调入门店可以确认接单")
+	}
+
+	if transfer.Status != model.TransferStatusPendingAccept {
+		return nil, errors.New("只有待接单状态的调拨单可以确认接单")
+	}
+
+	now := time.Now()
+	transfer.Status = model.TransferStatusPendingOut
+	transfer.AcceptOperatorID = operatorID
+	transfer.AcceptOperatorName = operatorName
+	transfer.AcceptedAt = &now
+
+	if err := database.DB.Save(&transfer).Error; err != nil {
+		return nil, err
+	}
+
+	transfer.Items, _ = s.getItems(transfer.ID)
+
+	go s.dingTalk.SendText(fmt.Sprintf("调拨单[%s]已被确认接单，请及时安排出库", transfer.TransferNo), false, nil)
+
+	return &transfer, nil
+}
+
+func (s *TransferService) ConfirmOutbound(id uint, operatorID uint, operatorName string, storeID uint, remark string) (*model.TransferOrder, error) {
+	var transfer model.TransferOrder
+	if err := database.DB.First(&transfer, id).Error; err != nil {
+		return nil, errors.New("调拨单不存在")
+	}
+
+	if transfer.FromStoreID != storeID {
+		return nil, errors.New("只有调出门店可以执行出库操作")
+	}
+
+	if transfer.Status != model.TransferStatusPendingOut {
 		return nil, errors.New("只有待出库状态的调拨单可以确认出库")
 	}
 
@@ -214,10 +253,14 @@ func (s *TransferService) ConfirmOutbound(id uint, operatorID uint, operatorName
 	return &transfer, nil
 }
 
-func (s *TransferService) StartShipping(id uint, logisticsCompany, trackingNo, logisticsCode string) (*model.TransferOrder, error) {
+func (s *TransferService) StartShipping(id uint, logisticsCompany, trackingNo, logisticsCode string, storeID uint) (*model.TransferOrder, error) {
 	var transfer model.TransferOrder
 	if err := database.DB.First(&transfer, id).Error; err != nil {
 		return nil, errors.New("调拨单不存在")
+	}
+
+	if transfer.FromStoreID != storeID {
+		return nil, errors.New("只有调出门店可以执行发货操作")
 	}
 
 	if transfer.Status != model.TransferStatusOutConfirmed {
@@ -244,7 +287,8 @@ func (s *TransferService) StartShipping(id uint, logisticsCompany, trackingNo, l
 		Description:   "货物已发出，开始运输",
 		TrackTime:     &time.Time{},
 	}
-	initTrack.TrackTime = &[]time.Time{time.Now()}[0]
+	now := time.Now()
+	initTrack.TrackTime = &now
 
 	if err := tx.Create(&initTrack).Error; err != nil {
 		tx.Rollback()
@@ -256,10 +300,14 @@ func (s *TransferService) StartShipping(id uint, logisticsCompany, trackingNo, l
 	return &transfer, nil
 }
 
-func (s *TransferService) ReceiveTransfer(id uint, req *dto.ReceiveTransferDTO) (*model.TransferOrder, error) {
+func (s *TransferService) ReceiveTransfer(id uint, req *dto.ReceiveTransferDTO, storeID uint) (*model.TransferOrder, error) {
 	var transfer model.TransferOrder
 	if err := database.DB.First(&transfer, id).Error; err != nil {
 		return nil, errors.New("调拨单不存在")
+	}
+
+	if transfer.ToStoreID != storeID {
+		return nil, errors.New("只有调入门店可以执行收货操作")
 	}
 
 	if transfer.Status != model.TransferStatusInTransit && transfer.Status != model.TransferStatusOutConfirmed {
@@ -271,8 +319,6 @@ func (s *TransferService) ReceiveTransfer(id uint, req *dto.ReceiveTransferDTO) 
 	tx := database.DB.Begin()
 
 	hasDiff := false
-	var totalInQty decimal.Decimal
-	var totalInAmount decimal.Decimal
 
 	for _, item := range req.Items {
 		var transferItem model.TransferOrderItem
@@ -299,11 +345,10 @@ func (s *TransferService) ReceiveTransfer(id uint, req *dto.ReceiveTransferDTO) 
 			transferItem.Remark = item.Remark
 		}
 
-		result := tx.Model(&model.Ingredient{}).
-			Where("id = ? AND store_id = ?", transferItem.IngredientID, transfer.ToStoreID)
-
 		var existingIngredient model.Ingredient
-		err := result.First(&existingIngredient).Error
+		err := tx.Where("ingredient_no = ? AND store_id = ?", transferItem.IngredientNo, transfer.ToStoreID).
+			First(&existingIngredient).Error
+
 		if err != nil {
 			newIngredient := model.Ingredient{
 				StoreID:       transfer.ToStoreID,
@@ -320,11 +365,10 @@ func (s *TransferService) ReceiveTransfer(id uint, req *dto.ReceiveTransferDTO) 
 				return nil, err
 			}
 		} else {
-			result.Update("current_stock", gorm.Expr("current_stock + ?", item.InQty))
+			tx.Model(&model.Ingredient{}).
+				Where("id = ?", existingIngredient.ID).
+				Update("current_stock", gorm.Expr("current_stock + ?", item.InQty))
 		}
-
-		totalInQty = totalInQty.Add(item.InQty)
-		totalInAmount = totalInAmount.Add(transferItem.Amount)
 
 		if err := tx.Save(&transferItem).Error; err != nil {
 			tx.Rollback()
@@ -337,10 +381,6 @@ func (s *TransferService) ReceiveTransfer(id uint, req *dto.ReceiveTransferDTO) 
 	transfer.InOperatorName = req.OperatorName
 	transfer.ReceivedAt = &now
 	transfer.HasDiff = hasDiff
-
-	if hasDiff {
-		transfer.Status = model.TransferStatusReceived
-	}
 
 	if err := tx.Save(&transfer).Error; err != nil {
 		tx.Rollback()
@@ -358,14 +398,47 @@ func (s *TransferService) ReceiveTransfer(id uint, req *dto.ReceiveTransferDTO) 
 	return &transfer, nil
 }
 
-func (s *TransferService) CompleteTransfer(id uint, diffRemark string) (*model.TransferOrder, error) {
+func (s *TransferService) CompleteTransfer(id uint, diffRemark string, storeID uint) (*model.TransferOrder, error) {
 	var transfer model.TransferOrder
 	if err := database.DB.First(&transfer, id).Error; err != nil {
 		return nil, errors.New("调拨单不存在")
 	}
 
+	if transfer.FromStoreID != storeID && transfer.ToStoreID != storeID {
+		return nil, errors.New("只有相关门店可以完成调拨单")
+	}
+
 	if transfer.Status != model.TransferStatusReceived {
 		return nil, errors.New("只有已收货状态的调拨单可以完成")
+	}
+
+	tx := database.DB.Begin()
+
+	items, err := s.getItems(transfer.ID)
+	if err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	if transfer.HasDiff {
+		for _, item := range items {
+			if !item.DiffQty.Equal(decimal.Zero) {
+				var fromIngredient model.Ingredient
+				err := tx.Where("id = ? AND store_id = ?", item.IngredientID, transfer.FromStoreID).
+					First(&fromIngredient).Error
+				if err == nil {
+					if item.DiffQty.GreaterThan(decimal.Zero) {
+						tx.Model(&model.Ingredient{}).
+							Where("id = ?", fromIngredient.ID).
+							Update("current_stock", gorm.Expr("current_stock - ?", item.DiffQty))
+					} else {
+						tx.Model(&model.Ingredient{}).
+							Where("id = ?", fromIngredient.ID).
+							Update("current_stock", gorm.Expr("current_stock + ?", item.DiffQty.Abs()))
+					}
+				}
+			}
+		}
 	}
 
 	now := time.Now()
@@ -373,19 +446,26 @@ func (s *TransferService) CompleteTransfer(id uint, diffRemark string) (*model.T
 	transfer.CompletedAt = &now
 	transfer.DiffRemark = diffRemark
 
-	if err := database.DB.Save(&transfer).Error; err != nil {
+	if err := tx.Save(&transfer).Error; err != nil {
+		tx.Rollback()
 		return nil, err
 	}
 
-	transfer.Items, _ = s.getItems(transfer.ID)
+	tx.Commit()
+
+	transfer.Items = items
 
 	return &transfer, nil
 }
 
-func (s *TransferService) CancelTransfer(id uint, remark string) (*model.TransferOrder, error) {
+func (s *TransferService) CancelTransfer(id uint, remark string, storeID uint) (*model.TransferOrder, error) {
 	var transfer model.TransferOrder
 	if err := database.DB.First(&transfer, id).Error; err != nil {
 		return nil, errors.New("调拨单不存在")
+	}
+
+	if transfer.FromStoreID != storeID {
+		return nil, errors.New("只有调出门店可以取消调拨单")
 	}
 
 	if transfer.Status >= model.TransferStatusOutConfirmed {
@@ -402,6 +482,63 @@ func (s *TransferService) CancelTransfer(id uint, remark string) (*model.Transfe
 	}
 
 	return &transfer, nil
+}
+
+func (s *TransferService) RefreshLogisticsTrack(id uint) ([]model.TransferLogistics, error) {
+	var transfer model.TransferOrder
+	if err := database.DB.First(&transfer, id).Error; err != nil {
+		return nil, errors.New("调拨单不存在")
+	}
+
+	if transfer.TrackingNo == "" {
+		return nil, errors.New("暂无物流单号")
+	}
+
+	logisticsCode := transfer.LogisticsCompany
+	if code := GetLogisticsCompanyCode(transfer.LogisticsCompany); code != "" {
+		logisticsCode = code
+	}
+
+	result, err := s.kdnService.GetLogisticsTrack(transfer.TrackingNo, logisticsCode)
+	if err != nil {
+		return nil, err
+	}
+
+	tx := database.DB.Begin()
+
+	if err := tx.Where("transfer_id = ?", id).Delete(&model.TransferLogistics{}).Error; err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	tracks := make([]model.TransferLogistics, 0, len(result.Traces))
+	for _, trace := range result.Traces {
+		trackTime, _ := time.ParseInLocation("2006-01-02 15:04:05", trace.AcceptTime, time.Local)
+		track := model.TransferLogistics{
+			TransferID:    id,
+			TrackingNo:    transfer.TrackingNo,
+			LogisticsCode: logisticsCode,
+			LogisticsName: transfer.LogisticsCompany,
+			Status:        GetLogisticsStatusText(result.State),
+			Location:      trace.Location,
+			Description:   trace.AcceptStation,
+			Operator:      "",
+			OperatorPhone: "",
+			TrackTime:     &trackTime,
+		}
+		tracks = append(tracks, track)
+	}
+
+	if len(tracks) > 0 {
+		if err := tx.Create(&tracks).Error; err != nil {
+			tx.Rollback()
+			return nil, err
+		}
+	}
+
+	tx.Commit()
+
+	return s.GetLogisticsTracks(id)
 }
 
 func (s *TransferService) UpdateLogisticsTrack(id uint, tracks []model.TransferLogistics) error {
@@ -446,6 +583,34 @@ func (s *TransferService) getItems(transferID uint) ([]model.TransferOrderItem, 
 
 func (s *TransferService) GetItems(transferID uint) ([]model.TransferOrderItem, error) {
 	return s.getItems(transferID)
+}
+
+func (s *TransferService) RejectTransfer(id uint, operatorID uint, operatorName string, storeID uint, reason string) (*model.TransferOrder, error) {
+	var transfer model.TransferOrder
+	if err := database.DB.First(&transfer, id).Error; err != nil {
+		return nil, errors.New("调拨单不存在")
+	}
+
+	if transfer.ToStoreID != storeID {
+		return nil, errors.New("只有调入门店可以拒单")
+	}
+
+	if transfer.Status != model.TransferStatusPendingAccept {
+		return nil, errors.New("只有待接单状态可以拒单")
+	}
+
+	transfer.Status = model.TransferStatusCancelled
+	if reason != "" {
+		transfer.Remark = transfer.Remark + "\n拒单原因: " + reason
+	}
+
+	if err := database.DB.Save(&transfer).Error; err != nil {
+		return nil, err
+	}
+
+	go s.dingTalk.SendText(fmt.Sprintf("调拨单[%s]已被拒绝，请及时处理", transfer.TransferNo), false, nil)
+
+	return &transfer, nil
 }
 
 func generateTransferNo() string {
