@@ -42,9 +42,17 @@ func (s *AccountsPayableService) generateReconcileNo(storeID uint) string {
 }
 
 func (s *AccountsPayableService) CreatePayableFromPurchase(purchase *model.PurchaseOrder) error {
+	return s.CreatePayableFromPurchaseWithAmount(purchase, purchase.TotalAmount)
+}
+
+func (s *AccountsPayableService) CreatePayableFromPurchaseWithAmount(purchase *model.PurchaseOrder, actualAmount decimal.Decimal) error {
 	existing, _ := s.payableRepo.GetByBusinessID("purchase", purchase.ID)
 	if existing != nil {
 		return nil
+	}
+
+	if actualAmount.IsZero() || actualAmount.IsNegative() {
+		actualAmount = purchase.TotalAmount
 	}
 
 	var paymentTermDays int
@@ -59,10 +67,11 @@ func (s *AccountsPayableService) CreatePayableFromPurchase(purchase *model.Purch
 	}
 
 	var dueDate string
+	billDate := time.Now()
 	if paymentTermDays > 0 {
-		dueDate = time.Now().AddDate(0, 0, paymentTermDays).Format("2006-01-02")
+		dueDate = billDate.AddDate(0, 0, paymentTermDays).Format("2006-01-02")
 	} else {
-		dueDate = purchase.CreatedAt.Format("2006-01-02")
+		dueDate = billDate.Format("2006-01-02")
 	}
 
 	payable := &model.AccountsPayable{
@@ -73,17 +82,22 @@ func (s *AccountsPayableService) CreatePayableFromPurchase(purchase *model.Purch
 		BusinessType: "purchase",
 		BusinessID:   purchase.ID,
 		BusinessNo:   purchase.PurchaseNo,
-		Amount:       purchase.TotalAmount,
+		Amount:       actualAmount,
 		PaidAmount:   decimal.Zero,
-		Balance:      purchase.TotalAmount,
+		Balance:      actualAmount,
+		BillDate:     billDate.Format("2006-01-02"),
 		DueDate:      dueDate,
 		Status:       "unpaid",
 		IsOverdue:    0,
-		Remark:       "采购订单自动生成应付账款",
+		Remark:       fmt.Sprintf("采购收货自动生成应付账款（实收金额），采购单号%s", purchase.PurchaseNo),
 	}
 
 	if err := s.payableRepo.Create(payable); err != nil {
 		return fmt.Errorf("create payable failed: %w", err)
+	}
+
+	if purchase.SupplierID > 0 {
+		go s.supplierRepo.UpdateStats(purchase.SupplierID)
 	}
 
 	return nil
@@ -485,6 +499,7 @@ func (s *AccountsPayableService) convertToPayableResponse(p *model.AccountsPayab
 		BusinessType: p.BusinessType,
 		BusinessID:   p.BusinessID,
 		BusinessNo:   p.BusinessNo,
+		BillDate:     p.BillDate,
 		Amount:       p.Amount,
 		PaidAmount:   p.PaidAmount,
 		Balance:      p.Balance,

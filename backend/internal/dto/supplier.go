@@ -237,6 +237,7 @@ type PayableResponse struct {
 	BusinessType string          `json:"business_type"`
 	BusinessID   uint            `json:"business_id"`
 	BusinessNo   string          `json:"business_no"`
+	BillDate     string          `json:"bill_date"`
 	Amount       decimal.Decimal `json:"amount"`
 	PaidAmount   decimal.Decimal `json:"paid_amount"`
 	Balance      decimal.Decimal `json:"balance"`

@@ -87,6 +87,7 @@ type AccountsPayable struct {
 	BusinessType   string          `gorm:"size:30;default:purchase" json:"business_type"`
 	BusinessID     uint            `gorm:"index" json:"business_id"`
 	BusinessNo     string          `gorm:"size:50;index" json:"business_no"`
+	BillDate       string          `gorm:"size:10;index" json:"bill_date"`
 	Amount         decimal.Decimal `gorm:"type:decimal(12,2);not null" json:"amount"`
 	PaidAmount     decimal.Decimal `gorm:"type:decimal(12,2);default:0" json:"paid_amount"`
 	Balance        decimal.Decimal `gorm:"type:decimal(12,2);default:0" json:"balance"`

@@ -57,12 +57,14 @@ var businessTypeMap = map[string]string{
 type SupplierService struct {
 	supplierRepo *repository.SupplierRepository
 	smsService   *SmsService
+	emailService *EmailService
 }
 
 func NewSupplierService() *SupplierService {
 	return &SupplierService{
 		supplierRepo: repository.NewSupplierRepository(nil),
 		smsService:   NewSmsService(),
+		emailService: NewEmailService(),
 	}
 }
 
@@ -215,7 +217,15 @@ func (s *SupplierService) NotifySupplier(id uint, notifyTypes []string, content 
 			}
 		case "email":
 			if supplier.Email != "" {
-				log.Printf("[SupplierService] Would send email to %s (%s): %s", supplier.Name, supplier.Email, content)
+				log.Printf("[SupplierService] Sending email to %s (%s): %s", supplier.Name, supplier.Email, content)
+				emailSubject := fmt.Sprintf("【大排档POS】供应商通知")
+				htmlBody := buildSupplierNotifyEmail(supplier.Name, content)
+				_ = s.emailService.SendEmail(&EmailMessage{
+					To:     []string{supplier.Email},
+					Subject: emailSubject,
+					Body:    htmlBody,
+					IsHTML:  true,
+				})
 			}
 		}
 	}
@@ -274,6 +284,7 @@ type PurchaseReceiveService struct {
 	receiveRepo  *repository.PurchaseReceiveRepository
 	supplierRepo *repository.SupplierRepository
 	purchaseSvc  *PurchaseService
+	payableSvc   *AccountsPayableService
 }
 
 func NewPurchaseReceiveService() *PurchaseReceiveService {
@@ -281,6 +292,7 @@ func NewPurchaseReceiveService() *PurchaseReceiveService {
 		receiveRepo:  repository.NewPurchaseReceiveRepository(nil),
 		supplierRepo: repository.NewSupplierRepository(nil),
 		purchaseSvc:  NewPurchaseService(),
+		payableSvc:   NewAccountsPayableService(),
 	}
 }
 
@@ -375,8 +387,22 @@ func (s *PurchaseReceiveService) CreateReceive(req *dto.PurchaseReceiveCreateDTO
 		return nil, err
 	}
 
+	allReceived, cumulativeReceivedAmount := s.computeReceiveStatus(purchase, receive)
+
 	if err := tx.Commit().Error; err != nil {
 		return nil, err
+	}
+
+	if allReceived {
+		_ = s.purchaseSvc.UpdateStatus(purchase.ID, 4)
+		log.Printf("[PurchaseReceiveService] Purchase %s fully received, auto marked as completed", purchase.PurchaseNo)
+
+		if err := s.payableSvc.CreatePayableFromPurchaseWithAmount(purchase, cumulativeReceivedAmount); err != nil {
+			log.Printf("[PurchaseReceiveService] Auto create payable from purchase %s failed: %v", purchase.PurchaseNo, err)
+		} else {
+			log.Printf("[PurchaseReceiveService] Auto created accounts payable for purchase %s, amount: ¥%s",
+				purchase.PurchaseNo, cumulativeReceivedAmount.String())
+		}
 	}
 
 	if purchase.SupplierID > 0 {
@@ -384,6 +410,25 @@ func (s *PurchaseReceiveService) CreateReceive(req *dto.PurchaseReceiveCreateDTO
 	}
 
 	return s.GetReceive(receive.ID)
+}
+
+func (s *PurchaseReceiveService) computeReceiveStatus(purchase *model.PurchaseOrder, receive *model.PurchaseReceive) (bool, decimal.Decimal) {
+	var cumulativeReceived decimal.Decimal
+	allReceived := true
+
+	for _, purchaseItem := range purchase.Items {
+		itemReceived := purchaseItem.ReceivedQty
+		for _, recvItem := range receive.Items {
+			if recvItem.IngredientID == purchaseItem.IngredientID {
+				itemReceived = itemReceived.Add(recvItem.QualifiedQty)
+			}
+		}
+		cumulativeReceived = cumulativeReceived.Add(itemReceived.Mul(purchaseItem.UnitPrice))
+		if itemReceived.LessThan(purchaseItem.PurchaseQty) {
+			allReceived = false
+		}
+	}
+	return allReceived, cumulativeReceived
 }
 
 func (s *PurchaseReceiveService) updatePurchaseAfterReceive(tx *gorm.DB, purchase *model.PurchaseOrder, receive *model.PurchaseReceive) error {
@@ -534,3 +579,113 @@ func (s *PurchaseReceiveService) convertToReceiveResponse(r *model.PurchaseRecei
 		Items:        items,
 	}
 }
+
+func buildSupplierNotifyEmail(supplierName, content string) string {
+	return fmt.Sprintf(`<div style="max-width:640px;margin:0 auto;font-family:'Microsoft YaHei',Arial,sans-serif;font-size:14px;color:#333;">
+	<div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:20px 30px;color:#fff;border-radius:8px 8px 0 0;">
+		<h2 style="margin:0;font-size:20px;">大排档POS系统 · 供应商通知</h2>
+	</div>
+	<div style="padding:30px;background:#fff;border:1px solid #e9ecef;border-top:none;border-radius:0 0 8px 8px;line-height:1.8;">
+		<p style="margin:0 0 16px;">尊敬的 <b style="color:#667eea;">%s</b>：</p>
+		<div style="padding:16px 20px;background:#f8f9fa;border-left:4px solid #667eea;border-radius:4px;margin:0 0 20px;">
+			%s
+		</div>
+		<p style="margin:0 0 8px;color:#868e96;font-size:13px;">此邮件由系统自动发送，请勿直接回复。</p>
+		<p style="margin:0;color:#868e96;font-size:13px;">如有疑问，请联系门店采购人员。</p>
+	</div>
+	<div style="text-align:center;color:#adb5bd;font-size:12px;padding:20px 0;">
+		© %d 大排档POS系统 · 智慧餐饮解决方案
+	</div>
+</div>`, supplierName, content, time.Now().Year())
+}
+
+func buildPurchaseOrderEmail(purchase *model.PurchaseOrder) string {
+	var itemsHTML string
+	total := decimal.Zero
+	for i, item := range purchase.Items {
+		subtotal := item.PurchaseQty.Mul(item.UnitPrice)
+		total = total.Add(subtotal)
+		itemsHTML += fmt.Sprintf(`<tr>
+			<td style="padding:10px;border-bottom:1px solid #e9ecef;">%d</td>
+			<td style="padding:10px;border-bottom:1px solid #e9ecef;">%s</td>
+			<td style="padding:10px;border-bottom:1px solid #e9ecef;">%s</td>
+			<td style="padding:10px;border-bottom:1px solid #e9ecef;text-align:right;">%s</td>
+			<td style="padding:10px;border-bottom:1px solid #e9ecef;text-align:right;">¥%s</td>
+			<td style="padding:10px;border-bottom:1px solid #e9ecef;text-align:right;">¥%s</td>
+		</tr>`, i+1, item.IngredientName, item.Unit,
+			item.PurchaseQty.String(),
+			item.UnitPrice.StringFixed(2),
+			subtotal.StringFixed(2))
+	}
+
+	supplierName := purchase.SupplierName
+	expectedDate := purchase.ExpectedDate
+	if expectedDate == "" {
+		expectedDate = "尽快安排"
+	}
+
+	return fmt.Sprintf(`<div style="max-width:720px;margin:0 auto;font-family:'Microsoft YaHei',Arial,sans-serif;font-size:14px;color:#333;">
+	<div style="background:linear-gradient(135deg,#4facfe,#00f2fe);padding:24px 36px;color:#fff;border-radius:8px 8px 0 0;">
+		<h2 style="margin:0 0 8px;font-size:22px;">新采购订单 · 请及时备货</h2>
+		<p style="margin:0;opacity:.9;">订单号：<b>%s</b></p>
+	</div>
+	<div style="padding:30px;background:#fff;border:1px solid #e9ecef;border-top:none;border-radius:0 0 8px 8px;line-height:1.8;">
+		<p style="margin:0 0 16px;">尊敬的 <b style="color:#4facfe;">%s</b>：</p>
+		<p style="margin:0 0 10px;">我司有新的采购订单，请按以下要求安排发货：</p>
+
+		<div style="background:#f8f9fa;padding:16px 20px;border-radius:6px;margin:0 0 24px;">
+			<p style="margin:0 0 8px;"><b>📦 采购单号：</b>%s</p>
+			<p style="margin:0 0 8px;"><b>🏪 所属门店：</b>门店ID %d</p>
+			<p style="margin:0 0 8px;"><b>📅 期望到货：</b>%s</p>
+			<p style="margin:0;"><b>💰 订单总金额：</b><span style="font-size:18px;color:#f56c6c;font-weight:bold;">¥%s</span></p>
+		</div>
+
+		<h4 style="margin:0 0 12px;padding-left:10px;border-left:4px solid #4facfe;">📋 采购明细</h4>
+		<table style="width:100%%;border-collapse:collapse;font-size:13px;margin:0 0 16px;">
+			<thead style="background:#f1f3f5;">
+				<tr>
+					<th style="padding:10px;border-bottom:2px solid #dee2e6;text-align:left;">序号</th>
+					<th style="padding:10px;border-bottom:2px solid #dee2e6;text-align:left;">食材名称</th>
+					<th style="padding:10px;border-bottom:2px solid #dee2e6;text-align:left;">单位</th>
+					<th style="padding:10px;border-bottom:2px solid #dee2e6;text-align:right;">采购数量</th>
+					<th style="padding:10px;border-bottom:2px solid #dee2e6;text-align:right;">单价</th>
+					<th style="padding:10px;border-bottom:2px solid #dee2e6;text-align:right;">小计</th>
+				</tr>
+			</thead>
+			<tbody>
+				%s
+			</tbody>
+			<tfoot>
+				<tr style="background:#fff9db;">
+					<td colspan="5" style="padding:12px 10px;text-align:right;font-weight:bold;">合计：</td>
+					<td style="padding:12px 10px;text-align:right;font-weight:bold;color:#f56c6c;font-size:16px;">¥%s</td>
+				</tr>
+			</tfoot>
+		</table>
+
+		%s
+
+		<div style="color:#868e96;font-size:13px;margin-top:24px;padding-top:16px;border-top:1px dashed #e9ecef;">
+			<p style="margin:0 0 6px;">📞 采购联系人：%s &nbsp;&nbsp;📱 %s</p>
+			<p style="margin:0;">此邮件由系统自动发出，如有疑问请直接联系采购人员。</p>
+		</div>
+	</div>
+	<div style="text-align:center;color:#adb5bd;font-size:12px;padding:20px 0;">
+		© %d 大排档POS系统 · 智慧餐饮采购平台
+	</div>
+</div>`, purchase.PurchaseNo, supplierName, purchase.PurchaseNo,
+		purchase.StoreID, expectedDate,
+		purchase.TotalAmount.StringFixed(2),
+		itemsHTML, total.StringFixed(2),
+		func() string {
+			if purchase.Remark != "" {
+				return fmt.Sprintf(`<div style="background:#fff3bf;padding:12px 16px;border-radius:6px;margin:0 0 16px;">
+					<b style="color:#d48806;">📝 备注：</b>%s
+				</div>`, purchase.Remark)
+			}
+			return ""
+		}(),
+		purchase.SupplierName, purchase.SupplierPhone,
+		time.Now().Year())
+}
+

@@ -25,6 +25,7 @@ type Config struct {
 	Eleme       ElemeConfig       `mapstructure:"eleme"`
 	Forecast    ForecastConfig    `mapstructure:"forecast"`
 	KuaiDiNiao  KuaiDiNiaoConfig  `mapstructure:"kuaidiniao"`
+	Email       EmailConfig       `mapstructure:"email"`
 }
 
 type KuaiDiNiaoConfig struct {
@@ -145,6 +146,18 @@ type AlipayConfig struct {
 	PublicKey  string `mapstructure:"public_key"`
 	NotifyURL  string `mapstructure:"notify_url"`
 	Sandbox    bool   `mapstructure:"sandbox"`
+}
+
+type EmailConfig struct {
+	Enabled    bool   `mapstructure:"enabled"`
+	Host       string `mapstructure:"host"`
+	Port       int    `mapstructure:"port"`
+	Username   string `mapstructure:"username"`
+	Password   string `mapstructure:"password"`
+	FromName   string `mapstructure:"from_name"`
+	FromEmail  string `mapstructure:"from_email"`
+	UseSSL     bool   `mapstructure:"use_ssl"`
+	UseTLS     bool   `mapstructure:"use_tls"`
 }
 
 var AppConfig *Config

@@ -107,6 +107,14 @@ func main() {
 		&model.TransferOrderItem{},
 		&model.TransferLogistics{},
 
+		&model.Supplier{},
+		&model.PurchaseReceive{},
+		&model.PurchaseReceiveItem{},
+		&model.AccountsPayable{},
+		&model.PayablePayment{},
+		&model.Reconciliation{},
+		&model.ReconciliationItem{},
+
 		&model.TableOrderHistory{},
 		&model.TableOrderItem{},
 		&model.ProductRecommendScore{},

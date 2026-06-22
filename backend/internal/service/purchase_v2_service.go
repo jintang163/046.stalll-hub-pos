@@ -17,15 +17,17 @@ type PurchaseOrderV2Service struct {
 	payableSvc    *AccountsPayableService
 	smsService    *SmsService
 	dingTalkSvc   *DingTalkService
+	emailService  *EmailService
 }
 
 func NewPurchaseOrderV2Service() *PurchaseOrderV2Service {
 	return &PurchaseOrderV2Service{
-		purchaseSvc: NewPurchaseService(),
-		supplierSvc: NewSupplierService(),
-		payableSvc:  NewAccountsPayableService(),
-		smsService:  NewSmsService(),
-		dingTalkSvc: NewDingTalkService(),
+		purchaseSvc:  NewPurchaseService(),
+		supplierSvc:  NewSupplierService(),
+		payableSvc:   NewAccountsPayableService(),
+		smsService:   NewSmsService(),
+		dingTalkSvc:  NewDingTalkService(),
+		emailService: NewEmailService(),
 	}
 }
 
@@ -77,11 +79,64 @@ func (s *PurchaseOrderV2Service) CreatePurchaseOrder(req *dto.PurchaseOrderCreat
 	purchase.SupplierID = req.SupplierID
 	purchase.PaymentTerm = paymentTerm
 	purchase.ExpectedDate = req.ExpectedDate
+	purchase.SupplierPhone = supplierPhone
+	purchase.SupplierEmail = supplierEmail
 
 	log.Printf("[PurchaseOrderV2Service] Created purchase order %s for supplier %s",
 		purchase.PurchaseNo, supplierName)
 
+	sendPurchaseNotifications(purchase, s.smsService, s.emailService, s.dingTalkSvc)
+
+	_ = s.purchaseSvc.UpdateStatus(purchase.ID, 1)
+
 	return s.GetPurchaseOrder(purchase.ID)
+}
+
+func sendPurchaseNotifications(purchase *model.PurchaseOrder, smsSvc *SmsService,
+	emailSvc *EmailService, dingTalkSvc *DingTalkService) {
+
+	smsContent := fmt.Sprintf("您有新的采购订单：单号%s，金额¥%s，请及时备货发货。",
+		purchase.PurchaseNo, purchase.TotalAmount.String())
+
+	if purchase.SupplierPhone != "" {
+		go func(phone, content string) {
+			err := smsSvc.SendSms(purchase.StoreID, 0, phone,
+				"采购订单通知", "PURCHASE_NEW", content, 0)
+			if err != nil {
+				log.Printf("[PurchaseOrderV2Service] Auto send SMS to supplier %s (%s) failed: %v",
+					purchase.SupplierName, phone, err)
+			} else {
+				log.Printf("[PurchaseOrderV2Service] Auto SMS sent to %s (%s): %s",
+					purchase.SupplierName, phone, content)
+			}
+		}(purchase.SupplierPhone, smsContent)
+	}
+
+	if purchase.SupplierEmail != "" {
+		go func(email, supplierName string, po *model.PurchaseOrder) {
+			subject := fmt.Sprintf("【大排档POS】新采购订单 %s 请及时备货", po.PurchaseNo)
+			htmlBody := buildPurchaseOrderEmail(po)
+			err := emailSvc.SendEmail(&EmailMessage{
+				To:      []string{email},
+				Subject: subject,
+				Body:    htmlBody,
+				IsHTML:  true,
+			})
+			if err != nil {
+				log.Printf("[PurchaseOrderV2Service] Auto send email to supplier %s (%s) failed: %v",
+					supplierName, email, err)
+			} else {
+				log.Printf("[PurchaseOrderV2Service] Auto email queued for %s (%s), subject: %s",
+					supplierName, email, subject)
+			}
+		}(purchase.SupplierEmail, purchase.SupplierName, purchase)
+	}
+
+	go func(po *model.PurchaseOrder) {
+		dingMsg := fmt.Sprintf("📋 新采购订单已发送\n单号：%s\n供应商：%s\n总金额：¥%s\n明细数量：%d种食材",
+			po.PurchaseNo, po.SupplierName, po.TotalAmount.String(), len(po.Items))
+		_ = dingTalkSvc.SendDingTalkNotify(dingMsg, "采购通知")
+	}(purchase)
 }
 
 func (s *PurchaseOrderV2Service) GetPurchaseOrder(id uint) (*dto.PurchaseOrderV2Response, error) {
@@ -147,8 +202,19 @@ func (s *PurchaseOrderV2Service) SendToSupplier(id uint, notifyTypes []string, c
 				}
 			case "email":
 				if purchase.SupplierEmail != "" {
-					log.Printf("[PurchaseOrderV2Service] Would send email to %s: %s",
+					log.Printf("[PurchaseOrderV2Service] Sending email to %s: %s",
 						purchase.SupplierEmail, notifyContent)
+					subject := fmt.Sprintf("【大排档POS】采购订单通知 %s", purchase.PurchaseNo)
+					htmlBody := buildPurchaseOrderEmail(purchase)
+					if content != "" {
+						htmlBody = buildSupplierNotifyEmail(purchase.SupplierName, content)
+					}
+					_ = s.emailService.SendEmail(&EmailMessage{
+						To:      []string{purchase.SupplierEmail},
+						Subject: subject,
+						Body:    htmlBody,
+						IsHTML:  true,
+					})
 				}
 			}
 		}
