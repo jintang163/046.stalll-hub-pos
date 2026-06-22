@@ -102,6 +102,10 @@ func main() {
 		&model.SmsTemplate{},
 		&model.SmsTask{},
 		&model.SmsRecord{},
+
+		&model.TransferOrder{},
+		&model.TransferOrderItem{},
+		&model.TransferLogistics{},
 	)
 
 	initDefaultData()

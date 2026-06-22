@@ -89,4 +89,9 @@ forecast:
   safety_stock_ratio: 1.2
   send_to_dingtalk: true
 
+kuaidiniao:
+  ebusiness_id: ""
+  app_key: ""
+  api_url: "https://api.kdniao.com/Ebusiness/EbusinessOrderHandle.aspx"
+
 

@@ -45,6 +45,7 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 	timeSlotPricingHandler := handler.NewTimeSlotPricingHandler()
 	reviewHandler := handler.NewReviewHandler()
 	smsHandler := handler.NewSmsHandler()
+	transferHandler := handler.NewTransferHandler()
 
 	orderHandler := handler.NewOrderHandler(nil)
 
@@ -627,6 +628,21 @@ func SetupRouter(db *gorm.DB, nsqProducer *nsq.Producer) *gin.Engine {
 			sms.GET("/records/:id", smsHandler.GetRecord)
 
 			sms.POST("/test-send", smsHandler.SendTestSms)
+		}
+
+		transfers := api.Group("/transfers")
+		transfers.Use(middleware.JWTAuth())
+		{
+			transfers.POST("", transferHandler.CreateTransfer)
+			transfers.GET("", transferHandler.ListTransfers)
+			transfers.GET("/:id", transferHandler.GetTransfer)
+			transfers.GET("/:id/items", transferHandler.GetTransferItems)
+			transfers.POST("/:id/confirm-outbound", transferHandler.ConfirmOutbound)
+			transfers.POST("/:id/ship", transferHandler.StartShipping)
+			transfers.POST("/:id/receive", transferHandler.ReceiveTransfer)
+			transfers.POST("/:id/complete", transferHandler.CompleteTransfer)
+			transfers.POST("/:id/cancel", transferHandler.CancelTransfer)
+			transfers.GET("/:id/logistics", transferHandler.GetLogisticsTrack)
 		}
 	}
 

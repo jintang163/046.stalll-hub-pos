@@ -147,6 +147,12 @@ const routes = [
         meta: { title: '成本告警', icon: 'Bell' }
       },
       {
+        path: 'transfers',
+        name: 'Transfers',
+        component: () => import('@/views/transfers/index.vue'),
+        meta: { title: '库存调拨', icon: 'Switch' }
+      },
+      {
         path: 'stores',
         name: 'Stores',
         component: () => import('@/views/stores/index.vue'),

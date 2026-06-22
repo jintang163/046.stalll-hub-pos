@@ -24,6 +24,13 @@ type Config struct {
 	Meituan     MeituanConfig     `mapstructure:"meituan"`
 	Eleme       ElemeConfig       `mapstructure:"eleme"`
 	Forecast    ForecastConfig    `mapstructure:"forecast"`
+	KuaiDiNiao  KuaiDiNiaoConfig  `mapstructure:"kuaidiniao"`
+}
+
+type KuaiDiNiaoConfig struct {
+	EBusinessID string `mapstructure:"ebusiness_id"`
+	AppKey      string `mapstructure:"app_key"`
+	APIURL      string `mapstructure:"api_url"`
 }
 
 type AmapConfig struct {
