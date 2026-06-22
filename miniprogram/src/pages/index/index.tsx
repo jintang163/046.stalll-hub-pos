@@ -24,7 +24,6 @@ const Index: React.FC = () => {
   const [quantity, setQuantity] = useState(1)
   const [showSkuPopup, setShowSkuPopup] = useState(false)
   const [recommendItems, setRecommendItems] = useState<RecommendItem[]>([])
-  const [recommendLoading, setRecommendLoading] = useState(false)
 
   const currentStore = useAppStore(state => state.currentStore)
   const tableNo = useCartStore(state => state.tableNo)
@@ -70,14 +69,11 @@ const Index: React.FC = () => {
       setRecommendItems([])
       return
     }
-    setRecommendLoading(true)
     try {
       const result = await getScanOrderRecommendations(storeId, tableNumber, 4)
       setRecommendItems(result.items || [])
     } catch (e) {
       setRecommendItems([])
-    } finally {
-      setRecommendLoading(false)
     }
   }, [])
 
@@ -144,38 +140,51 @@ const Index: React.FC = () => {
     }
   }
 
-  const handleRecommendAddClick = (e: React.MouseEvent, item: RecommendItem) => {
+  const handleRecommendAddClick = async (e: React.MouseEvent, item: RecommendItem) => {
     e.stopPropagation()
-    
-    const product = products.find(p => p.id === item.product_id)
-    if (!product) {
-      Taro.showToast({ title: '商品信息获取失败', icon: 'none' })
+
+    if (item.sku_sold_out) {
+      Taro.showToast({ title: '该商品已沽清', icon: 'none' })
       return
     }
-    
-    const sku = product.skus.find(s => s.id === item.sku_id)
-    if (!sku || sku.status !== 1 || sku.is_sold_out || sku.stock <= 0) {
-      const availableSkus = product.skus.filter(s => s.status === 1 && !s.is_sold_out)
-      if (availableSkus.length === 0) {
-        Taro.showToast({ title: '该商品已沽清', icon: 'none' })
-        return
-      }
-      handleAddClick(e, product)
+
+    if (item.has_multi_sku || item.has_attribute) {
+      Taro.navigateTo({ url: `/pages/product/detail?id=${item.product_id}` })
       return
     }
-    
-    const availableAttrs = product.attributes.filter(a => a.status === 1 && a.values.some(v => v.status === 1))
-    if (availableAttrs.length === 0) {
-      const attrs: { attr_id: number; attr_name: string; value: AttributeValue }[] = []
-      addItem(product, sku, attrs, 1)
-      Taro.showToast({ title: '已加入购物车', icon: 'success' })
-    } else {
-      setSelectedProduct(product)
-      setSelectedSku(sku)
-      setSelectedAttrs(new Map())
-      setQuantity(1)
-      setShowSkuPopup(true)
+
+    const fakeProduct: Product = {
+      id: item.product_id,
+      name: item.product_name,
+      description: '',
+      image: item.main_image,
+      category_id: item.category_id,
+      sort_order: 0,
+      status: 1,
+      is_hot: false,
+      is_recommend: false,
+      warning_threshold: 0,
+      skus: [{
+        id: item.sku_id,
+        product_id: item.product_id,
+        sku_code: '',
+        spec_name: item.sku_name || '默认',
+        price: parseFloat(item.price) || 0,
+        original_price: parseFloat(item.price) || 0,
+        stock: item.sku_stock,
+        image: '',
+        status: 1,
+        is_sold_out: false,
+      }],
+      attributes: [],
+      min_price: parseFloat(item.price) || 0,
+      max_price: parseFloat(item.price) || 0,
+      total_stock: item.sku_stock,
     }
+    const fakeSku: SKU = fakeProduct.skus[0]
+    const attrs: { attr_id: number; attr_name: string; value: AttributeValue }[] = []
+    addItem(fakeProduct, fakeSku, attrs, 1)
+    Taro.showToast({ title: '已加入购物车', icon: 'success' })
   }
 
   const getReasonTagStyle = (reasonType: string) => {
@@ -299,7 +308,6 @@ const Index: React.FC = () => {
         <View className={styles.recommendSection}>
           <View className={styles.recommendHeader}>
             <Text className={styles.recommendTitle}>✨ 为你推荐</Text>
-            {tableNo && <Text className={styles.recommendSubtitle}>（{tableNo}号桌专属）</Text>}
           </View>
           <ScrollView scrollX className={styles.recommendScroll}>
             <View className={styles.recommendList}>
@@ -498,7 +506,7 @@ const Index: React.FC = () => {
               ))}
 
               <View className={styles.skuSection}>
-                <Text className={styles.sectionTitle}>数量</View>
+                <Text className={styles.sectionTitle}>数量</Text>
                 <View className={styles.quantitySelector}>
                   <View
                     className={styles.quantityBtn}

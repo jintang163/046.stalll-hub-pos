@@ -915,7 +915,7 @@ func (s *RecommendService) GetScanOrderRecommendations(storeID uint, tableNo str
 			ProductName: h.ProductName,
 			CategoryID:  h.CategoryID,
 			Score:       score,
-			Reason:      "该桌常点",
+			Reason:      "常点好味",
 			ReasonType:  "table_history",
 		}
 	}
@@ -925,7 +925,7 @@ func (s *RecommendService) GetScanOrderRecommendations(storeID uint, tableNo str
 		if existing, ok := scoreMap[h.ProductID]; ok {
 			existing.Score += score
 			if h.HotScore*timeWeight > existing.Score*0.5 {
-				existing.Reason = "这个时段大家都爱吃"
+				existing.Reason = "此时段热销"
 				existing.ReasonType = "time_hot"
 			}
 		} else {
@@ -934,7 +934,7 @@ func (s *RecommendService) GetScanOrderRecommendations(storeID uint, tableNo str
 				ProductName: h.ProductName,
 				CategoryID:  h.CategoryID,
 				Score:       score,
-				Reason:      "这个时段大家都爱吃",
+				Reason:      "此时段热销",
 				ReasonType:  "time_hot",
 			}
 		}
@@ -950,7 +950,7 @@ func (s *RecommendService) GetScanOrderRecommendations(storeID uint, tableNo str
 				ProductName: h.ProductName,
 				CategoryID:  h.CategoryID,
 				Score:       score,
-				Reason:      "热门推荐",
+				Reason:      "人气推荐",
 				ReasonType:  "hot",
 			}
 		}
@@ -1022,32 +1022,58 @@ func (s *RecommendService) GetScanOrderRecommendations(storeID uint, tableNo str
 		}
 		price := decimal.Zero
 		skuID := uint(0)
+		skuName := ""
+		skuSoldOut := true
+		skuStock := 0
+		hasMultiSKU := len(product.SKUs) > 1
+		hasAttribute := false
 		if len(product.SKUs) > 0 {
 			for _, sku := range product.SKUs {
 				if sku.Status == 1 && !sku.IsSoldOut {
 					price = sku.Price
 					skuID = sku.ID
+					skuName = sku.SpecName
+					skuSoldOut = false
+					skuStock = int(sku.Stock)
 					break
 				}
 			}
+			if skuID == 0 {
+				skuID = product.SKUs[0].ID
+				skuName = product.SKUs[0].SpecName
+				price = product.SKUs[0].Price
+				skuSoldOut = true
+				skuStock = 0
+			}
+		}
+		for _, attr := range product.Attributes {
+			if attr.Status == 1 {
+				hasAttribute = true
+				break
+			}
 		}
 		result = append(result, dto.RecommendItemDTO{
-			ProductID:   item.ProductID,
-			ProductName: item.ProductName,
-			CategoryID:  item.CategoryID,
-			MainImage:   product.MainImage,
-			SKUID:       skuID,
-			Price:       price.String(),
-			Score:       item.Score,
-			Reason:      item.Reason,
-			ReasonType:  item.ReasonType,
+			ProductID:    item.ProductID,
+			ProductName:  item.ProductName,
+			CategoryID:   item.CategoryID,
+			MainImage:    product.MainImage,
+			SKUID:        skuID,
+			SKUName:      skuName,
+			SKUSoldOut:   skuSoldOut,
+			SKUStock:     skuStock,
+			HasMultiSKU:  hasMultiSKU,
+			HasAttribute: hasAttribute,
+			Price:        price.String(),
+			Score:        item.Score,
+			Reason:       item.Reason,
+			ReasonType:   item.ReasonType,
 		})
 	}
 
 	s.setRecommendCache(cacheKey, result)
 
-	log.Printf("[Recommend] 扫码点餐推荐: 门店=%d, 桌号=%s, 桌号历史=%d, 时段热门=%d, 返回结果=%d",
-		storeID, tableNo, len(tableHistoryProducts), len(timeHotProducts), len(result))
+	log.Printf("[Recommend] 扫码点餐推荐: 门店=%d, 桌号历史=%d, 时段热门=%d, 返回结果=%d",
+		storeID, len(tableHistoryProducts), len(timeHotProducts), len(result))
 
 	return result, nil
 }

@@ -37,15 +37,20 @@ type UpdateRecommendConfigRequest struct {
 }
 
 type RecommendItemDTO struct {
-	ProductID   uint   `json:"product_id"`
-	ProductName string `json:"product_name"`
-	CategoryID  uint   `json:"category_id"`
-	MainImage   string `json:"main_image"`
-	Price       string `json:"price"`
-	SKUID       uint   `json:"sku_id"`
-	Score       float64 `json:"score"`
-	Reason      string `json:"reason"`
-	ReasonType  string `json:"reason_type"`
+	ProductID    uint   `json:"product_id"`
+	ProductName  string `json:"product_name"`
+	CategoryID   uint   `json:"category_id"`
+	MainImage    string `json:"main_image"`
+	Price        string `json:"price"`
+	SKUID        uint   `json:"sku_id"`
+	SKUName      string `json:"sku_name"`
+	SKUSoldOut   bool   `json:"sku_sold_out"`
+	SKUStock     int    `json:"sku_stock"`
+	HasMultiSKU  bool   `json:"has_multi_sku"`
+	HasAttribute bool   `json:"has_attribute"`
+	Score        float64 `json:"score"`
+	Reason       string `json:"reason"`
+	ReasonType   string `json:"reason_type"`
 }
 
 type GetRecommendRequest struct {

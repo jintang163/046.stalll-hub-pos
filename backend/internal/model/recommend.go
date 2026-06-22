@@ -1,7 +1,8 @@
 package model
 
 import (
-	"crypto/md5"
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"time"
@@ -11,11 +12,10 @@ import (
 
 type TableOrderHistory struct {
 	BaseModel
-	StoreID    uint   `gorm:"not null;index" json:"store_id"`
-	TableHash  string `gorm:"size:32;not null;index" json:"table_hash"`
-	TableNo    string `gorm:"size:20" json:"-"`
-	VisitCount int    `gorm:"default:1" json:"visit_count"`
-	LastVisit  *time.Time `json:"last_visit"`
+	StoreID     uint            `gorm:"not null;index" json:"store_id"`
+	TableHash   string          `gorm:"size:64;not null;index" json:"table_hash"`
+	VisitCount  int             `gorm:"default:1" json:"visit_count"`
+	LastVisit   *time.Time      `json:"last_visit"`
 	TotalAmount decimal.Decimal `gorm:"type:decimal(12,2);default:0" json:"total_amount"`
 }
 
@@ -23,7 +23,7 @@ type TableOrderItem struct {
 	BaseModel
 	HistoryID   uint            `gorm:"not null;index" json:"history_id"`
 	StoreID     uint            `gorm:"not null;index" json:"store_id"`
-	TableHash   string          `gorm:"size:32;not null;index" json:"table_hash"`
+	TableHash   string          `gorm:"size:64;not null;index" json:"table_hash"`
 	ProductID   uint            `gorm:"not null;index" json:"product_id"`
 	ProductName string          `gorm:"size:100;not null" json:"product_name"`
 	CategoryID  uint            `gorm:"index" json:"category_id"`
@@ -45,10 +45,13 @@ type ProductRecommendScore struct {
 	UpdatedAt   *time.Time      `json:"updated_at"`
 }
 
+const tableHashSecret = "stalll-pos-table-anonymization-v1"
+
 func GenerateTableHash(storeID uint, tableNo string) string {
-	data := []byte(fmt.Sprintf("%d_%s_anonymous", storeID, tableNo))
-	hash := md5.Sum(data)
-	return hex.EncodeToString(hash[:])
+	data := fmt.Sprintf("%d:%s", storeID, tableNo)
+	mac := hmac.New(sha256.New, []byte(tableHashSecret))
+	mac.Write([]byte(data))
+	return hex.EncodeToString(mac.Sum(nil))
 }
 
 type RecommendConfig struct {

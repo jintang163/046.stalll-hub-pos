@@ -7,6 +7,11 @@ export interface RecommendItem {
   main_image: string
   price: string
   sku_id: number
+  sku_name: string
+  sku_sold_out: boolean
+  sku_stock: number
+  has_multi_sku: boolean
+  has_attribute: boolean
   score: number
   reason: string
   reason_type: 'cf' | 'hot' | 'user_history' | 'user_favorite' | 'cf_hot' | 'table_history' | 'time_hot'
@@ -14,7 +19,6 @@ export interface RecommendItem {
 
 export interface ScanOrderRecommendResponse {
   items: RecommendItem[]
-  table_no: string
   store_id: number
   count: number
   timestamp: number

@@ -205,7 +205,6 @@ func (h *RecommendHandler) GetScanOrderRecommendations(c *gin.Context) {
 	}
 	middleware.Success(c, gin.H{
 		"items":     list,
-		"table_no":  tableNo,
 		"store_id":  storeID,
 		"count":     len(list),
 		"timestamp": time.Now().Unix(),
